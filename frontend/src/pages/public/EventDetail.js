@@ -269,14 +269,14 @@ export default function EventDetail() {
   };
 
   return (
-    <div>
+    <div className="event-detail-shell">
       {/* Nav */}
       <nav className="landing-nav">
         <button className="btn btn-ghost btn-sm" onClick={() => navigate(-1)}>
           <i data-lucide="arrow-left" style={{ width: 14, height: 14 }} /> Back
         </button>
         <SanyLogo size={28} full />
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="event-detail-nav-actions">
           <button className="btn btn-secondary btn-sm" onClick={share}>
             <i data-lucide="share-2" style={{ width: 13, height: 13 }} /> Share
           </button>
@@ -297,10 +297,10 @@ export default function EventDetail() {
         </div>
       </nav>
 
-        <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 20px' }}>
+      <div className="event-detail-wrap">
         {/* Banner */}
         {bannerUrl && (
-          <div className="responsive-banner" style={{ borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 28, position: 'relative' }}>
+          <div className="responsive-banner event-detail-banner">
             <img
               src={bannerUrl}
               alt={event.title}
@@ -308,38 +308,36 @@ export default function EventDetail() {
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
             {soldOut && (
-              <div style={{ position: 'absolute', top: 16, right: 16, background: 'var(--danger)', color: '#fff', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div className="event-detail-banner-flag event-detail-banner-flag-danger">
                 <i data-lucide="ban" style={{ width: 14, height: 14 }} /> SOLD OUT
               </div>
             )}
             {almostSoldOut && (
-              <div style={{ position: 'absolute', top: 16, right: 16, background: 'var(--warning)', color: '#0d0b06', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 700 }}>
+              <div className="event-detail-banner-flag event-detail-banner-flag-warning">
                 🔥 Only {remaining} left!
               </div>
             )}
           </div>
         )}
 
-        <div className="responsive-grid-2" style={{ gap: 32 }}>
+        <div className="responsive-grid-2 event-detail-grid">
           {/* Left */}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+            <div className="event-detail-badges">
               {event.category && <span className="badge badge-gray">{event.category}</span>}
               {soldOut && <span className="badge badge-red">Sold Out</span>}
               {almostSoldOut && <span className="badge badge-orange">Almost full</span>}
             </div>
 
-            <h1 style={{ fontFamily: 'Syne, sans-serif', fontSize: 28, fontWeight: 800, marginBottom: 20, lineHeight: 1.2 }}>
-              {event.title}
-            </h1>
+            <h1 className="event-detail-title">{event.title}</h1>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
+            <div className="event-detail-meta-list">
               {[
                 { icon: 'calendar', text: `${fmtDate(event.event_date)} at ${event.start_time}` },
                 { icon: event.location_type === 'virtual' ? 'video' : 'map-pin', text: event.location },
                 { icon: 'users', text: `${event.total_sold} attending · ${Math.max(0, remaining)} left` },
               ].map((r, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                <div key={i} className="event-detail-meta-row">
                   <i data-lucide={r.icon} style={{ width: 16, height: 16, color: 'var(--accent)', flexShrink: 0 }} />
                   {r.text}
                 </div>
@@ -354,11 +352,11 @@ export default function EventDetail() {
               </div>
             )}
 
-            <h3 style={{ fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 600, marginBottom: 10 }}>About this event</h3>
-            <p style={{ color: 'var(--text2)', fontSize: 14, lineHeight: 1.7 }}>{event.description}</p>
+            <h3 className="event-detail-section-title">About this event</h3>
+            <p className="event-detail-copy">{event.description}</p>
 
             {event.tags?.length > 0 && (
-              <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+              <div className="event-detail-tags">
                 {event.tags.map(t => <span key={t} className="badge badge-gray">{t}</span>)}
               </div>
             )}
@@ -366,8 +364,8 @@ export default function EventDetail() {
             <hr className="divider" />
 
             {/* Organiser section with link to public profile */}
-            <h3 style={{ fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 600, marginBottom: 12 }}>Organiser</h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <h3 className="event-detail-section-title">Organiser</h3>
+            <div className="event-detail-organizer">
               <div className="avatar avatar-orange" style={{ width: 44, height: 44, fontSize: 18 }}>
                 {event.organizer_name?.[0]}
               </div>
@@ -387,16 +385,15 @@ export default function EventDetail() {
 
             {/* Social share strip */}
             <hr className="divider" />
-            <div className="responsive-actions">
-              <span style={{ fontSize: 13, color: 'var(--text2)' }}>Share this event:</span>
+            <div className="responsive-actions event-detail-share-strip">
+              <span className="event-detail-share-label">Share this event:</span>
               <button onClick={share} className="btn btn-secondary btn-sm">
                 <i data-lucide="share-2" style={{ width: 13, height: 13 }} /> Share
               </button>
               <a
                 href={`https://wa.me/?text=${encodeURIComponent(event.title + ' — Sany Adventures: ' + window.location.href)}`}
                 target="_blank" rel="noreferrer"
-                className="btn btn-secondary btn-sm"
-                style={{ background: '#25D366', color: '#fff', border: 'none' }}
+                className="btn btn-secondary btn-sm event-detail-whatsapp"
               >
                 WhatsApp
               </a>
@@ -412,23 +409,17 @@ export default function EventDetail() {
 
           {/* Right — sticky ticket panel */}
           <div>
-            <div className="card responsive-sticky-card">
-              <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 600, marginBottom: 16 }}>
-                Ticket Options
-              </div>
+            <div className="card responsive-sticky-card event-detail-ticket-panel">
+              <div className="event-detail-section-title event-detail-ticket-title">Ticket Options</div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+              <div className="event-detail-ticket-list">
                 {event.ticket_types?.map(t => {
                   const ttAvail   = t.quantity - t.sold;
                   const ttSoldOut = ttAvail <= 0;
                   return (
-                    <div key={t.id} style={{
-                      border: '1px solid var(--border)',
-                      borderRadius: 'var(--radius)', padding: 12,
-                      opacity: ttSoldOut ? 0.6 : 1,
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div key={t.id} className={`event-detail-ticket-row ${ttSoldOut ? 'is-sold-out' : ''}`}>
+                      <div className="event-detail-ticket-row-head">
+                        <div className="event-detail-ticket-name">
                           <div style={{ width: 8, height: 8, borderRadius: '50%', background: t.color }} />
                           <span style={{ fontWeight: 500 }}>{t.name}</span>
                         </div>
@@ -440,7 +431,7 @@ export default function EventDetail() {
                         }
                       </div>
                       {!ttSoldOut && (
-                        <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+                        <div className="event-detail-ticket-stock">
                           {ttAvail} remaining
                           {ttAvail <= 10 && <span style={{ color: 'var(--danger)', marginLeft: 4 }}>— almost gone!</span>}
                         </div>

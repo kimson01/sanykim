@@ -53,15 +53,8 @@ export default function OrgDashboard() {
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text2)' }}>Loading…</div>;
 
   return (
-    <div>
-      <div
-        style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          padding: '11px 14px', marginBottom: 16,
-          background: 'var(--info-dim)', border: '1px solid rgba(59,130,246,0.25)',
-          borderRadius: 10,
-        }}
-      >
+    <div className="account-shell">
+      <div className="account-info-banner">
         <i data-lucide="info" style={{ width: 14, height: 14, color: 'var(--info)', flexShrink: 0 }} />
         <span style={{ fontSize: 12, color: 'var(--info)' }}>
           Organizer accounts cannot buy tickets. Use a separate attendee account for purchases.

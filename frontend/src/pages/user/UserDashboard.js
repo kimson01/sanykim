@@ -13,9 +13,9 @@ function daysUntil(dateStr) {
 function CountdownBadge({ dateStr }) {
   const d = daysUntil(dateStr);
   if (d < 0) return null;
-  if (d === 0) return <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--danger)', background: 'var(--danger-dim)', padding: '2px 8px', borderRadius: 20 }}>Today!</span>;
-  if (d === 1) return <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--warning)', background: 'var(--warning-dim)', padding: '2px 8px', borderRadius: 20 }}>Tomorrow</span>;
-  if (d <= 7)  return <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-dim)', padding: '2px 8px', borderRadius: 20 }}>{d} days</span>;
+  if (d === 0) return <span className="account-chip account-chip-danger">Today</span>;
+  if (d === 1) return <span className="account-chip account-chip-warning">Tomorrow</span>;
+  if (d <= 7)  return <span className="account-chip account-chip-accent">{d} days</span>;
   return null;
 }
 
@@ -69,15 +69,13 @@ export default function UserDashboard() {
                            .reduce((s, o) => s + Number(o.total), 0);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div className="account-shell">
 
       {/* Greeting */}
-      <div className="responsive-header">
+      <div className="account-hero">
         <div>
-          <h1 style={{ fontFamily: 'Syne, sans-serif', fontSize: 20, fontWeight: 700, marginBottom: 2 }}>
-            Hello, {user?.name?.split(' ')[0]} 👋
-          </h1>
-          <div style={{ fontSize: 13, color: 'var(--text2)' }}>Here's your activity overview</div>
+          <h1 className="account-title">Hello, {user?.name?.split(' ')[0]}</h1>
+          <div className="account-subtitle">Your tickets, orders, and upcoming plans.</div>
         </div>
         <Link to="/" className="btn btn-primary btn-sm">
           <i data-lucide="search" style={{ width: 13, height: 13 }} /> Browse Events
@@ -117,10 +115,7 @@ export default function UserDashboard() {
         </div>
 
         {shown.length === 0 ? (
-          <div style={{
-            background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: 12, padding: '40px 24px', textAlign: 'center',
-          }}>
+          <div className="account-empty">
             <i data-lucide={tab === 'upcoming' ? 'calendar-x' : 'history'} style={{ width: 32, height: 32, color: 'var(--text3)', marginBottom: 12 }} />
             <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 600, marginBottom: 6 }}>
               {tab === 'upcoming' ? 'No upcoming events' : 'No past events yet'}
@@ -135,14 +130,9 @@ export default function UserDashboard() {
             )}
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div className="account-list">
             {shown.slice(0, 6).map(t => (
-              <div key={t.id} style={{
-                display: 'flex', alignItems: 'center', gap: 14,
-                background: 'var(--surface)', border: '1px solid var(--border)',
-                borderRadius: 10, padding: '12px 16px',
-                opacity: t.is_scanned ? 0.65 : 1,
-              }}>
+              <div key={t.id} className="account-list-row" style={{ opacity: t.is_scanned ? 0.65 : 1 }}>
                 {/* Thumbnail */}
                 {t.banner_url
                   ? <img src={t.banner_url} alt="" style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
@@ -152,14 +142,12 @@ export default function UserDashboard() {
                 }
 
                 {/* Details */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {t.event_title}
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
+                <div className="account-list-main">
+                  <div className="account-list-title">{t.event_title}</div>
+                  <div className="account-list-meta">
                     {fmtDate(t.event_date)} · {t.start_time} · {t.ticket_type_name}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>{t.location}</div>
+                  <div className="account-list-submeta">{t.location}</div>
                 </div>
 
                 {/* Right side */}
@@ -193,11 +181,11 @@ export default function UserDashboard() {
         </div>
 
         {orders.length === 0 ? (
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '32px 24px', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>
+          <div className="account-empty" style={{ color: 'var(--text3)', fontSize: 13, padding: '32px 24px' }}>
             No orders yet
           </div>
         ) : (
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+          <div className="account-panel">
             {orders.slice(0, 5).map((o, i) => (
               <div key={o.id} style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',

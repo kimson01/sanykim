@@ -13,7 +13,7 @@ const pendingOrderStorageKey = (eventId) => `ef_pending_order_${eventId}`;
 // ── Steps indicator ───────────────────────────────────────────
 function StepsBar({ active }) {
   return (
-    <div className="steps" style={{ marginBottom: 28 }}>
+    <div className="steps checkout-steps" style={{ marginBottom: 28 }}>
       {STEPS.map((s, i) => {
         const n = i + 1;
         const done = n < active, cur = n === active;
@@ -112,7 +112,7 @@ export default function CheckoutPage() {
 
   if (user && user.role !== 'user') {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div className="checkout-shell checkout-centered-shell">
         <div className="card" style={{ maxWidth: 420, textAlign: 'center' }}>
           <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 20, fontWeight: 700, marginBottom: 8 }}>
             Attendee account required
@@ -408,7 +408,7 @@ export default function CheckoutPage() {
   };
 
   if (!event) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)' }}>
+    <div className="checkout-shell checkout-centered-shell" style={{ color: 'var(--text2)' }}>
       <i data-lucide="loader-2" style={{ width: 28, height: 28 }} />
     </div>
   );
@@ -418,7 +418,7 @@ export default function CheckoutPage() {
     && event.ticket_types.every(t => (t.quantity - t.sold) <= 0);
   if ((event.capacity - event.total_sold) <= 0 || allSoldOut) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div className="checkout-shell checkout-centered-shell">
         <div className="card" style={{ maxWidth: 400, textAlign: 'center', padding: 36 }}>
           <div style={{ width: 56, height: 56, background: 'var(--danger-dim)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
             <i data-lucide="ban" style={{ width: 28, height: 28, color: 'var(--danger)' }} />
@@ -436,7 +436,7 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh' }}>
+    <div className="checkout-shell">
       {/* Nav */}
       <nav className="landing-nav">
         <button
@@ -450,7 +450,7 @@ export default function CheckoutPage() {
         <div style={{ width: 80, maxWidth: '100%' }} />
       </nav>
 
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 20px' }}>
+      <div className="checkout-wrap">
         <StepsBar active={step} />
 
         {/* ── Step 1: Select Tickets ──────────────────────── */}

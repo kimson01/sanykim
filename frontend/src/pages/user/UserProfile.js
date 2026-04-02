@@ -107,17 +107,13 @@ export default function UserProfile() {
   return (
     <div style={{ maxWidth: 520 }}>
       {/* Avatar strip */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 16,
-        padding: '16px 20px', background: 'var(--surface)',
-        border: '1px solid var(--border)', borderRadius: 12, marginBottom: 20,
-      }}>
+      <div className="profile-summary">
         <div className="avatar avatar-green" style={{ width: 52, height: 52, fontSize: 20, flexShrink: 0 }}>
           {user?.name?.[0] || 'U'}
         </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 17 }}>{user?.name}</div>
-          <div style={{ fontSize: 12, color: 'var(--text2)' }}>{user?.email}</div>
+        <div className="profile-summary-meta">
+          <div className="profile-summary-name">{user?.name}</div>
+          <div className="profile-summary-email">{user?.email}</div>
         </div>
         <span className="badge badge-green" style={{ fontSize: 10 }}>
           {user?.role === 'organizer' ? 'Organizer' : 'Attendee'}
@@ -125,14 +121,11 @@ export default function UserProfile() {
       </div>
 
       {/* Personal details */}
-      <div style={{
-        background: 'var(--surface)', border: '1px solid var(--border)',
-        borderRadius: 12, overflow: 'hidden', marginBottom: 16,
-      }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 13 }}>
+      <div className="account-panel" style={{ marginBottom: 16 }}>
+        <div className="account-panel-header">
           Personal details
         </div>
-        <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="account-panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Field label="Full name *" name="name" placeholder="Jane Doe" />
           <div className="form-group">
             <label className="form-label">Email</label>
@@ -149,15 +142,12 @@ export default function UserProfile() {
       </div>
 
       {/* Change password */}
-      <div style={{
-        background: 'var(--surface)', border: '1px solid var(--border)',
-        borderRadius: 12, overflow: 'hidden', marginBottom: 20,
-      }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 13 }}>
+      <div className="account-panel" style={{ marginBottom: 20 }}>
+        <div className="account-panel-header">
           Change password
           <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text3)', marginLeft: 8 }}>Leave blank to keep current</span>
         </div>
-        <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="account-panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Field label="Current password" name="current_password" type="password" placeholder="Your current password" />
           <Field label="New password"     name="new_password"     type="password" placeholder="At least 6 characters" />
           <Field label="Confirm new"      name="confirm_password" type="password" placeholder="Repeat new password" />

@@ -1,35 +1,88 @@
 // src/pages/admin/AdminDashboard.js
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { adminAPI, supportAPI } from '../../api/client';
-import { fmtCurrency, fmtDate, Badge, useToast } from '../../components/ui';
+import { Badge, fmtCurrency, fmtDate, useToast } from '../../components/ui';
 
-// ── Inline sparkline bar (pure CSS, no deps) ──────────────────
-function MiniBar({ data, valueKey, color = 'var(--accent)', height = 48 }) {
-  if (!data?.length) return (
-    <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <span style={{ fontSize: 11, color: 'var(--text3)' }}>No data yet</span>
-    </div>
-  );
-  const max = Math.max(...data.map(d => Number(d[valueKey]) || 0), 1);
+const ADMIN_ROUTES = {
+  dashboard: '/admin',
+  organizers: '/admin/organizers',
+  organizersPending: '/admin/organizers?status=pending',
+  events: '/admin/events',
+  transactions: '/admin/transactions',
+  conflicts: '/admin/conflicts',
+};
+
+const DASHBOARD_DEFAULTS = {
+  stats: {
+    total_events: 0,
+    total_organizers: 0,
+    total_tickets_sold: 0,
+    total_users: 0,
+    gross_revenue: 0,
+    platform_revenue: 0,
+    pending_organizers: 0,
+    today_orders: 0,
+    today_revenue: 0,
+    week_orders: 0,
+    week_revenue: 0,
+  },
+  recent_orders: [],
+  top_events: [],
+  pending_org_details: [],
+  top_organizers: [],
+  daily_revenue: [],
+  monthly_revenue: [],
+  order_breakdown: [],
+};
+
+function normalizeDashboardPayload(payload) {
+  const source = payload?.data?.data || payload?.data || payload || {};
+  return {
+    ...DASHBOARD_DEFAULTS,
+    ...source,
+    stats: {
+      ...DASHBOARD_DEFAULTS.stats,
+      ...(source.stats || source),
+    },
+    recent_orders: Array.isArray(source.recent_orders) ? source.recent_orders : [],
+    top_events: Array.isArray(source.top_events) ? source.top_events : [],
+    pending_org_details: Array.isArray(source.pending_org_details) ? source.pending_org_details : [],
+    top_organizers: Array.isArray(source.top_organizers) ? source.top_organizers : [],
+    daily_revenue: Array.isArray(source.daily_revenue) ? source.daily_revenue : [],
+    monthly_revenue: Array.isArray(source.monthly_revenue) ? source.monthly_revenue : [],
+    order_breakdown: Array.isArray(source.order_breakdown) ? source.order_breakdown : [],
+  };
+}
+
+function normalizeSupportOverview(payload) {
+  const source = payload?.data?.data || payload?.data || payload || {};
+  return {
+    ...source,
+    metrics: source?.metrics || {},
+    lanes: source?.lanes || {},
+  };
+}
+
+function MiniBar({ data, valueKey, tone = 'gold', labelFormatter, valueFormatter }) {
+  if (!data?.length) return <div className="admin-dashboard-chart-empty">No data yet</div>;
+
+  const max = Math.max(...data.map((item) => Number(item[valueKey]) || 0), 1);
+
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height }}>
-      {data.map((d, i) => {
-        const pct = Math.round((Number(d[valueKey]) / max) * 100);
-        const isLast = i === data.length - 1;
+    <div className={`admin-dashboard-chart admin-dashboard-chart-${tone}`}>
+      {data.map((item, index) => {
+        const rawValue = Number(item[valueKey]) || 0;
+        const label = labelFormatter ? labelFormatter(item) : '';
+        const value = valueFormatter ? valueFormatter(rawValue, item) : rawValue;
+        const height = Math.max(Math.round((rawValue / max) * 100), 6);
+
         return (
           <div
-            key={i}
-            title={`${d.day || d.month ? new Date(d.day || d.month).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' }) : ''}: ${valueKey === 'revenue' ? fmtCurrency(d[valueKey]) : d[valueKey]}`}
-            style={{
-              flex: 1,
-              height: `${Math.max(pct, 4)}%`,
-              background: isLast ? color : `${color}55`,
-              borderRadius: '2px 2px 0 0',
-              transition: 'height 0.4s',
-              cursor: 'default',
-              minHeight: 3,
-            }}
+            key={item.day || item.month || index}
+            className="admin-dashboard-chart-bar"
+            style={{ height: `${height}%` }}
+            title={label ? `${label}: ${value}` : String(value)}
           />
         );
       })}
@@ -37,79 +90,56 @@ function MiniBar({ data, valueKey, color = 'var(--accent)', height = 48 }) {
   );
 }
 
-// ── Single KPI row (label + value, no card border) ────────────
-function KpiRow({ label, value, sub, accent }) {
+function SectionHead({ eyebrow, title, subtitle, actionLabel, actionTo }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '9px 0', borderBottom: '1px solid var(--border)' }}>
-      <span style={{ fontSize: 12, color: 'var(--text2)' }}>{label}</span>
-      <div style={{ textAlign: 'right' }}>
-        <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 14, color: accent || 'var(--text)' }}>
-          {value}
-        </span>
-        {sub && <div style={{ fontSize: 10, color: 'var(--text3)' }}>{sub}</div>}
+    <div className="admin-dashboard-section-head">
+      <div>
+        {eyebrow && <div className="admin-dashboard-eyebrow">{eyebrow}</div>}
+        <h2 className="admin-dashboard-section-title">{title}</h2>
+        {subtitle && <p className="admin-dashboard-section-subtitle">{subtitle}</p>}
       </div>
-    </div>
-  );
-}
-
-// ── Section heading (replaces card titles) ────────────────────
-function SectionHead({ title, action, to }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-      <h2 style={{ fontFamily: 'Syne, sans-serif', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text3)' }}>
-        {title}
-      </h2>
-      {action && to && (
-        <Link to={to} style={{ fontSize: 11, color: 'var(--accent)', textDecoration: 'none' }}>
-          {action} →
+      {actionLabel && actionTo && (
+        <Link to={actionTo} className="admin-dashboard-section-link">
+          {actionLabel}
         </Link>
       )}
     </div>
   );
 }
 
-// ── Pending organizer quick-action row ────────────────────────
 function PendingOrgRow({ org, onApprove }) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const approve = async (e) => {
-    e.preventDefault();
+  const approve = async () => {
     setLoading(true);
     try {
       await adminAPI.updateOrgStatus(org.id, 'approved');
       toast(`${org.company_name} approved`);
       onApprove();
-    } catch { toast('Failed', 'error'); }
-    finally { setLoading(false); }
+    } catch {
+      toast('Failed', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-      <div className="avatar avatar-orange" style={{ width: 28, height: 28, fontSize: 11, flexShrink: 0 }}>
-        {org.name?.[0]}
+    <div className="admin-dashboard-list-row">
+      <div className="avatar avatar-orange admin-dashboard-list-avatar">
+        {org.name?.[0] || org.company_name?.[0] || 'O'}
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {org.company_name}
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-          {org.name} · Applied {fmtDate(org.created_at)}
+      <div className="admin-dashboard-list-main">
+        <div className="admin-dashboard-list-title">{org.company_name}</div>
+        <div className="admin-dashboard-list-meta">
+          {org.name} • Applied {fmtDate(org.created_at)}
         </div>
       </div>
-      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-        <button
-          className="btn btn-primary btn-sm"
-          onClick={approve}
-          disabled={loading}
-          style={{ padding: '4px 10px', fontSize: 11 }}
-        >
-          {loading
-            ? <i data-lucide="loader-2" style={{ width: 11, height: 11 }} />
-            : 'Approve'
-          }
+      <div className="admin-dashboard-list-actions">
+        <button className="btn btn-primary btn-sm" onClick={approve} disabled={loading}>
+          {loading ? <i data-lucide="loader-2" style={{ width: 12, height: 12 }} /> : 'Approve'}
         </button>
-        <Link to="/admin/organizers" className="btn btn-ghost btn-sm" style={{ padding: '4px 8px', fontSize: 11 }}>
+        <Link to={ADMIN_ROUTES.organizers} className="btn btn-ghost btn-sm">
           Review
         </Link>
       </div>
@@ -117,7 +147,39 @@ function PendingOrgRow({ org, onApprove }) {
   );
 }
 
-// ── Main dashboard ─────────────────────────────────────────────
+function TransactionRow({ order }) {
+  return (
+    <div className="admin-dashboard-list-row admin-dashboard-list-row-compact">
+      <div className="admin-dashboard-transaction-amount">
+        <strong>{fmtCurrency(order.total)}</strong>
+        <span>{fmtDate(order.created_at)}</span>
+      </div>
+      <div className="admin-dashboard-list-main">
+        <div className="admin-dashboard-list-title">{order.event_title}</div>
+        <div className="admin-dashboard-list-meta">
+          {order.attendee_name} • {order.order_ref}
+        </div>
+      </div>
+      <div className="admin-dashboard-transaction-tags">
+        <Badge variant="blue">{(order.payment_method || 'mpesa').toUpperCase()}</Badge>
+        <Badge
+          variant={
+            order.status === 'success'
+              ? 'green'
+              : order.status === 'pending'
+                ? 'yellow'
+                : order.status === 'refunded'
+                  ? 'orange'
+                  : 'red'
+          }
+        >
+          {order.status}
+        </Badge>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const [data, setData] = useState(null);
   const [supportOverview, setSupportOverview] = useState(null);
@@ -125,360 +187,427 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const load = useCallback(() => {
-    Promise.all([
-      adminAPI.dashboard(),
-      supportAPI.adminOverview(),
-    ])
-      .then(([dashboardRes, supportRes]) => {
-        setData(dashboardRes.data.data);
-        setSupportOverview(supportRes.data.data || null);
-      })
-      .catch((err) => {
-        setData(null);
-        setSupportOverview(null);
-        toast(err.response?.data?.message || 'Failed to load dashboard data', 'error');
+  const load = () => {
+    setLoading(true);
+    Promise.allSettled([adminAPI.dashboard(), supportAPI.adminOverview()])
+      .then(([dashboardResult, supportResult]) => {
+        if (dashboardResult.status !== 'fulfilled') {
+          setData(null);
+          setSupportOverview(null);
+          toast(
+            dashboardResult.reason?.response?.data?.message || 'Failed to load dashboard data',
+            'error'
+          );
+          return;
+        }
+
+        setData(normalizeDashboardPayload(dashboardResult.value));
+
+        if (supportResult.status === 'fulfilled') {
+          setSupportOverview(normalizeSupportOverview(supportResult.value));
+        } else {
+          setSupportOverview(null);
+        }
       })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
+    // Run once on mount; `toast` is not stable across renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  if (loading) {
+    return (
+      <div className="admin-dashboard-state">
+        <i data-lucide="loader-2" style={{ width: 24, height: 24 }} />
+      </div>
+    );
+  }
 
-  if (loading) return (
-    <div style={{ padding: 40, textAlign: 'center', color: 'var(--text2)' }}>
-      <i data-lucide="loader-2" style={{ width: 24, height: 24 }} />
-    </div>
-  );
   if (!data) return null;
 
-  const { stats, recent_orders, top_events, pending_org_details,
-          top_organizers, daily_revenue, monthly_revenue, order_breakdown } = data;
+  const stats = data?.stats || DASHBOARD_DEFAULTS.stats;
+  const recentOrders = data?.recent_orders || DASHBOARD_DEFAULTS.recent_orders;
+  const topEvents = data?.top_events || DASHBOARD_DEFAULTS.top_events;
+  const pendingOrgDetails = data?.pending_org_details || DASHBOARD_DEFAULTS.pending_org_details;
+  const topOrganizers = data?.top_organizers || DASHBOARD_DEFAULTS.top_organizers;
+  const dailyRevenue = data?.daily_revenue || DASHBOARD_DEFAULTS.daily_revenue;
+  const monthlyRevenue = data?.monthly_revenue || DASHBOARD_DEFAULTS.monthly_revenue;
+  const orderBreakdown = data?.order_breakdown || DASHBOARD_DEFAULTS.order_breakdown;
 
-  // Order status breakdown helper
   const orderStatus = (status) => {
-    const row = order_breakdown?.find(r => r.status === status);
-    return { count: parseInt(row?.total || 0), revenue: parseFloat(row?.revenue || 0) };
+    const row = orderBreakdown.find((item) => item.status === status);
+    return {
+      count: parseInt(row?.total || 0, 10),
+      revenue: parseFloat(row?.revenue || 0),
+    };
   };
-  const successOrders  = orderStatus('success');
-  const pendingOrders  = orderStatus('pending');
+
+  const successOrders = orderStatus('success');
+  const pendingOrders = orderStatus('pending');
   const refundedOrders = orderStatus('refunded');
   const supportMetrics = supportOverview?.metrics || {};
   const supportLanes = supportOverview?.lanes || {};
+  const revenue14d = dailyRevenue.reduce((sum, item) => sum + parseFloat(item?.revenue || 0), 0);
+  const orders14d = dailyRevenue.reduce((sum, item) => sum + parseInt(item?.orders || 0, 10), 0);
+  const totalSupportAttention = (supportMetrics.escalated || 0) + (supportMetrics.overdue || 0);
+  const activityDateLabel =
+    dailyRevenue.length > 0
+      ? new Date(dailyRevenue[0].day).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })
+      : '';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
-
-      {/* ── Purchase policy notice ───────────────────────── */}
-      <div
-        style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          padding: '11px 14px',
-          background: 'var(--info-dim)', border: '1px solid rgba(59,130,246,0.25)',
-          borderRadius: 10,
-        }}
-      >
-        <i data-lucide="info" style={{ width: 14, height: 14, color: 'var(--info)', flexShrink: 0 }} />
-        <span style={{ fontSize: 12, color: 'var(--info)' }}>
-          Admin accounts cannot buy tickets. Use a separate attendee account to make test or real purchases.
-        </span>
+    <div className="admin-dashboard">
+      <div className="admin-dashboard-policy">
+        <i data-lucide="info" style={{ width: 14, height: 14 }} />
+        <span>Admin accounts cannot buy tickets. Use a separate attendee account for test or real purchases.</span>
       </div>
 
-      {/* ── Alert banner: pending organizers ──────────────── */}
-      {stats.pending_organizers > 0 && (
-        <div
-          onClick={() => navigate('/admin/organizers?status=pending')}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            gap: 12, padding: '12px 16px',
-            background: 'var(--warning-dim)', border: '1px solid rgba(234,179,8,0.25)',
-            borderRadius: 10, cursor: 'pointer',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <i data-lucide="clock" style={{ width: 16, height: 16, color: 'var(--warning)', flexShrink: 0 }} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--warning)' }}>
-              {stats.pending_organizers} organizer application{stats.pending_organizers !== 1 ? 's' : ''} awaiting review
-            </span>
+      <section className="admin-dashboard-hero">
+        <div className="admin-dashboard-hero-main">
+          <div className="admin-dashboard-eyebrow">Platform overview</div>
+          <h1 className="admin-dashboard-hero-title">Admin dashboard</h1>
+          <p className="admin-dashboard-hero-copy">
+            Review approvals, monitor conflicts, and track revenue from one place.
+          </p>
+
+          <div className="admin-dashboard-hero-actions">
+            <Link to={ADMIN_ROUTES.organizersPending} className="btn btn-primary">
+              <i data-lucide="shield-check" style={{ width: 14, height: 14 }} /> Review organizers
+            </Link>
+            <Link to={ADMIN_ROUTES.conflicts} className="btn btn-secondary">
+              <i data-lucide="messages-square" style={{ width: 14, height: 14 }} /> View conflicts
+            </Link>
           </div>
-          <span style={{ fontSize: 12, color: 'var(--warning)', whiteSpace: 'nowrap' }}>Review now →</span>
-        </div>
-      )}
 
-      {/* ── Top metrics row — borderless inline stats ─────── */}
-      <div className="responsive-stats-strip" style={{ gap: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-        {[
-          { label: 'Platform revenue',  value: fmtCurrency(stats.platform_revenue), sub: `from ${fmtCurrency(stats.gross_revenue)} gross`, color: 'var(--accent)', icon: 'trending-up' },
-          { label: 'Tickets sold',       value: stats.total_tickets_sold.toLocaleString(), sub: `across ${stats.total_events} events`, color: 'var(--info)', icon: 'ticket' },
-          { label: 'Total users',        value: stats.total_users.toLocaleString(), sub: `${stats.total_organizers} organizers`, color: 'var(--accent2)', icon: 'users' },
-          { label: 'Today',              value: fmtCurrency(stats.today_revenue), sub: `${stats.today_orders} orders today`, color: 'var(--accent)', icon: 'zap' },
-        ].map((m, i) => (
-          <div key={i} style={{
-            padding: '18px 20px',
-            borderRight: i < 3 ? '1px solid var(--border)' : 'none',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <i data-lucide={m.icon} style={{ width: 14, height: 14, color: m.color }} />
-              <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
-                {m.label}
-              </span>
+          <div className="admin-dashboard-snapshot-grid">
+            <div className="admin-dashboard-snapshot">
+              <span>Platform revenue</span>
+              <strong>{fmtCurrency(stats.platform_revenue || 0)}</strong>
+              <small>From {fmtCurrency(stats.gross_revenue || 0)} gross</small>
             </div>
-            <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 22, fontWeight: 800, color: m.color, lineHeight: 1 }}>
-              {m.value}
+            <div className="admin-dashboard-snapshot">
+              <span>Tickets sold</span>
+              <strong>{(stats.total_tickets_sold || 0).toLocaleString()}</strong>
+              <small>Across {stats.total_events || 0} events</small>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>{m.sub}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Main grid: chart + order status + weekly ──────── */}
-      <div className="responsive-grid-2" style={{ gap: 20 }}>
-
-        {/* Revenue chart — 14-day */}
-        <div>
-          <SectionHead title="Daily revenue — last 14 days" />
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 10 }}>
-              <div>
-                <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 20, fontWeight: 700 }}>
-                  {fmtCurrency(daily_revenue.reduce((s, d) => s + parseFloat(d.revenue), 0))}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
-                  {daily_revenue.reduce((s, d) => s + parseInt(d.orders), 0)} orders
-                </div>
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-                This week: <strong style={{ color: 'var(--text2)' }}>{fmtCurrency(stats.week_revenue)}</strong>
-                {' · '}{stats.week_orders} orders
-              </div>
-            </div>
-            <MiniBar data={daily_revenue} valueKey="revenue" color="var(--accent)" height={80} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 10, color: 'var(--text3)' }}>
-              {daily_revenue.length > 0 && <>
-                <span>{new Date(daily_revenue[0]?.day).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })}</span>
-                <span>Today</span>
-              </>}
+            <div className="admin-dashboard-snapshot">
+              <span>People on platform</span>
+              <strong>{(stats.total_users || 0).toLocaleString()}</strong>
+              <small>{stats.total_organizers || 0} active organizers</small>
             </div>
           </div>
         </div>
 
-        {/* Order status breakdown */}
-        <div>
-          <SectionHead title="Order status" action="All orders" to="/admin/transactions" />
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px' }}>
-            {[
-              { label: 'Successful', count: successOrders.count,  revenue: successOrders.revenue,  color: 'var(--accent)' },
-              { label: 'Pending',    count: pendingOrders.count,   revenue: pendingOrders.revenue,   color: 'var(--warning)' },
-              { label: 'Refunded',   count: refundedOrders.count,  revenue: refundedOrders.revenue,  color: 'var(--danger)' },
-            ].map((s, i) => (
-              <div key={i} style={{ padding: '10px 0', borderBottom: i < 2 ? '1px solid var(--border)' : 'none' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, color: 'var(--text2)' }}>{s.label}</span>
+        <div className="admin-dashboard-hero-side">
+          <div className="admin-dashboard-priority-card">
+            <div className="admin-dashboard-priority-kicker">Needs attention now</div>
+            <div className="admin-dashboard-priority-value">
+              {(stats.pending_organizers || 0) + totalSupportAttention}
+            </div>
+            <p className="admin-dashboard-priority-copy">
+              Pending approvals, overdue cases, and unsettled payments need follow-up first.
+            </p>
+
+            <div className="admin-dashboard-priority-list">
+              <button
+                type="button"
+                className="admin-dashboard-priority-item"
+                onClick={() => navigate(ADMIN_ROUTES.organizersPending)}
+              >
+                <div>
+                  <strong>{stats.pending_organizers || 0}</strong>
+                  <span>organizer applications</span>
+                </div>
+                <i data-lucide="arrow-right" style={{ width: 14, height: 14 }} />
+              </button>
+              <button
+                type="button"
+                className="admin-dashboard-priority-item"
+                onClick={() => navigate(ADMIN_ROUTES.conflicts)}
+              >
+                <div>
+                  <strong>{supportMetrics.overdue || 0}</strong>
+                  <span>overdue conflict cases</span>
+                </div>
+                <i data-lucide="arrow-right" style={{ width: 14, height: 14 }} />
+              </button>
+              <button
+                type="button"
+                className="admin-dashboard-priority-item"
+                onClick={() => navigate(ADMIN_ROUTES.transactions)}
+              >
+                <div>
+                  <strong>{pendingOrders.count}</strong>
+                  <span>pending payments</span>
+                </div>
+                <i data-lucide="arrow-right" style={{ width: 14, height: 14 }} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="admin-dashboard-grid admin-dashboard-grid-priority">
+        <section className="admin-dashboard-panel admin-dashboard-panel-warm">
+          <SectionHead
+            eyebrow="What needs action"
+            title={`Organizer approvals${stats.pending_organizers ? ` (${stats.pending_organizers})` : ''}`}
+            subtitle="Review pending organizer accounts."
+            actionLabel="All organizers"
+            actionTo={ADMIN_ROUTES.organizers}
+          />
+
+          {pendingOrgDetails.length === 0 ? (
+            <div className="admin-dashboard-empty">
+              <i data-lucide="check-circle" style={{ width: 18, height: 18 }} />
+              <span>All applications are currently reviewed.</span>
+            </div>
+          ) : (
+            <div className="admin-dashboard-list">
+              {pendingOrgDetails.map((org) => (
+                <PendingOrgRow key={org.id} org={org} onApprove={load} />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="admin-dashboard-panel">
+          <SectionHead
+            eyebrow="Support pressure"
+            title="Inbox health"
+            subtitle="Watch case volume, escalations, and unread work."
+            actionLabel="Open conflicts"
+            actionTo={ADMIN_ROUTES.conflicts}
+          />
+
+          <div className="admin-dashboard-pill-grid">
+            <div className="admin-dashboard-pill-card">
+              <span>Open threads</span>
+              <strong>{(supportMetrics.open || 0).toLocaleString()}</strong>
+            </div>
+            <div className="admin-dashboard-pill-card admin-dashboard-pill-card-danger">
+              <span>Escalated</span>
+              <strong>{(supportMetrics.escalated || 0).toLocaleString()}</strong>
+            </div>
+            <div className="admin-dashboard-pill-card admin-dashboard-pill-card-warning">
+              <span>Overdue</span>
+              <strong>{(supportMetrics.overdue || 0).toLocaleString()}</strong>
+            </div>
+            <div className="admin-dashboard-pill-card admin-dashboard-pill-card-info">
+              <span>Unread</span>
+              <strong>{(supportMetrics.unread_total || 0).toLocaleString()}</strong>
+            </div>
+          </div>
+
+          <div className="admin-dashboard-lane-row">
+            <Badge variant="red">Super Admin {supportLanes.super_admin || 0}</Badge>
+            <Badge variant="yellow">Organizer {supportLanes.organizer || 0}</Badge>
+            <Badge variant="blue">Due Soon {supportMetrics.due_soon || 0}</Badge>
+            <Badge variant="gray">Resolved {supportMetrics.resolved || 0}</Badge>
+          </div>
+
+          <div className="admin-dashboard-note">
+            High escalations or overdue cases mean the conflicts queue needs attention.
+          </div>
+        </section>
+      </div>
+
+      <div className="admin-dashboard-grid">
+        <section className="admin-dashboard-panel admin-dashboard-panel-feature">
+          <SectionHead
+            eyebrow="How the platform is performing"
+            title="Revenue pulse"
+            subtitle="Recent revenue, order volume, and payment status."
+          />
+
+          <div className="admin-dashboard-performance-head">
+            <div>
+              <div className="admin-dashboard-performance-value">{fmtCurrency(revenue14d)}</div>
+              <div className="admin-dashboard-performance-meta">Last 14 days • {orders14d} orders</div>
+            </div>
+            <div className="admin-dashboard-performance-side">
+              <span>This week</span>
+              <strong>{fmtCurrency(stats.week_revenue || 0)}</strong>
+              <small>{stats.week_orders || 0} orders</small>
+            </div>
+          </div>
+
+          <MiniBar
+            data={dailyRevenue}
+            valueKey="revenue"
+            tone="gold"
+            labelFormatter={(item) =>
+              item.day
+                ? new Date(item.day).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })
+                : ''
+            }
+            valueFormatter={(value) => fmtCurrency(value)}
+          />
+
+          <div className="admin-dashboard-chart-caption">
+            <span>{activityDateLabel || 'Recent period'}</span>
+            <span>Today</span>
+          </div>
+
+          <div className="admin-dashboard-commerce-grid">
+            <div className="admin-dashboard-commerce-item">
+              <span>Successful orders</span>
+              <strong>{successOrders.count.toLocaleString()}</strong>
+              <small>{fmtCurrency(successOrders.revenue)}</small>
+            </div>
+            <div className="admin-dashboard-commerce-item">
+              <span>Pending orders</span>
+              <strong>{pendingOrders.count.toLocaleString()}</strong>
+              <small>{fmtCurrency(pendingOrders.revenue)}</small>
+            </div>
+            <div className="admin-dashboard-commerce-item">
+              <span>Refunded orders</span>
+              <strong>{refundedOrders.count.toLocaleString()}</strong>
+              <small>{fmtCurrency(refundedOrders.revenue)}</small>
+            </div>
+            <div className="admin-dashboard-commerce-item">
+              <span>Today</span>
+              <strong>{fmtCurrency(stats.today_revenue || 0)}</strong>
+              <small>{stats.today_orders || 0} orders today</small>
+            </div>
+          </div>
+        </section>
+
+        <section className="admin-dashboard-panel">
+          <SectionHead
+            eyebrow="Longer view"
+            title="Six-month revenue arc"
+            subtitle="Monthly revenue trend over the last six months."
+          />
+
+          <MiniBar
+            data={monthlyRevenue}
+            valueKey="revenue"
+            tone="teal"
+            labelFormatter={(item) =>
+              item.month
+                ? new Date(item.month).toLocaleDateString('en-KE', { month: 'short', year: 'numeric' })
+                : ''
+            }
+            valueFormatter={(value) => fmtCurrency(value)}
+          />
+
+          <div className="admin-dashboard-metric-stack">
+            <div className="admin-dashboard-metric-row">
+              <span>Gross revenue</span>
+              <strong>{fmtCurrency(stats.gross_revenue || 0)}</strong>
+            </div>
+            <div className="admin-dashboard-metric-row">
+              <span>Platform revenue</span>
+              <strong>{fmtCurrency(stats.platform_revenue || 0)}</strong>
+            </div>
+            <div className="admin-dashboard-metric-row">
+              <span>Events live</span>
+              <strong>{(stats.total_events || 0).toLocaleString()}</strong>
+            </div>
+            <div className="admin-dashboard-metric-row">
+              <span>Total users</span>
+              <strong>{(stats.total_users || 0).toLocaleString()}</strong>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div className="admin-dashboard-grid">
+        <section className="admin-dashboard-panel">
+          <SectionHead
+            eyebrow="Who is driving activity"
+            title="Top events by revenue"
+            subtitle="Best-performing events right now."
+            actionLabel="All events"
+            actionTo={ADMIN_ROUTES.events}
+          />
+
+          {topEvents.length === 0 ? (
+            <div className="admin-dashboard-empty">
+              <i data-lucide="calendar-x" style={{ width: 18, height: 18 }} />
+              <span>No published events yet.</span>
+            </div>
+          ) : (
+            <div className="admin-dashboard-list">
+              {topEvents.map((event, index) => (
+                <div key={event.id || index} className="admin-dashboard-list-row">
+                  <div className="admin-dashboard-rank">{index + 1}</div>
+                  <div className="admin-dashboard-list-main">
+                    <div className="admin-dashboard-list-title">{event.title}</div>
+                    <div className="admin-dashboard-list-meta">
+                      {fmtDate(event.event_date)} • {event.total_sold}/{event.capacity} sold
+                    </div>
                   </div>
-                  <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 15, color: s.color }}>
-                    {s.count.toLocaleString()}
-                  </span>
+                  <div className="admin-dashboard-list-value">
+                    <strong>{fmtCurrency(event.revenue)}</strong>
+                  </div>
                 </div>
-                <div style={{ background: 'var(--surface3)', borderRadius: 3, height: 3 }}>
-                  <div style={{
-                    background: s.color, height: '100%', borderRadius: 3,
-                    width: `${successOrders.count > 0 ? Math.round((s.count / (successOrders.count || 1)) * 100) : 0}%`,
-                    transition: 'width 0.5s',
-                  }} />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="admin-dashboard-panel">
+          <SectionHead
+            eyebrow="Who is driving activity"
+            title="Top organizers"
+            subtitle="Organizers generating the most revenue."
+            actionLabel="All organizers"
+            actionTo={ADMIN_ROUTES.organizers}
+          />
+
+          {topOrganizers.length === 0 ? (
+            <div className="admin-dashboard-empty">
+              <i data-lucide="users" style={{ width: 18, height: 18 }} />
+              <span>No organizer data yet.</span>
+            </div>
+          ) : (
+            <div className="admin-dashboard-list">
+              {topOrganizers.map((organizer, index) => (
+                <div key={organizer.id || index} className="admin-dashboard-list-row">
+                  <div className="admin-dashboard-rank">{index + 1}</div>
+                  <div className="admin-dashboard-list-main">
+                    <div className="admin-dashboard-list-title">{organizer.company_name}</div>
+                    <div className="admin-dashboard-list-meta">
+                      {organizer.event_count} events • {organizer.commission}% commission
+                    </div>
+                  </div>
+                  <div className="admin-dashboard-list-value">
+                    <strong>{fmtCurrency(organizer.total_revenue)}</strong>
+                  </div>
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>
-                  {fmtCurrency(s.revenue)}
-                </div>
-              </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      <section className="admin-dashboard-panel">
+        <SectionHead
+          eyebrow="What just happened"
+          title="Recent transactions"
+          subtitle="Latest payment activity and order status."
+          actionLabel="View all transactions"
+          actionTo={ADMIN_ROUTES.transactions}
+        />
+
+        {recentOrders.length === 0 ? (
+          <div className="admin-dashboard-empty">
+            <i data-lucide="receipt" style={{ width: 18, height: 18 }} />
+            <span>No orders yet.</span>
+          </div>
+        ) : (
+          <div className="admin-dashboard-list">
+            {recentOrders.map((order) => (
+              <TransactionRow key={order.id || order.order_ref} order={order} />
             ))}
           </div>
-        </div>
-      </div>
-
-      {/* ── Second row: pending orgs + top events ─────────── */}
-      <div className="responsive-grid-2" style={{ gap: 20 }}>
-
-        {/* Pending organizer applications */}
-        <div>
-          <SectionHead
-            title={`Pending applications${stats.pending_organizers > 0 ? ` (${stats.pending_organizers})` : ''}`}
-            action="All organizers"
-            to="/admin/organizers"
-          />
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '4px 16px' }}>
-            {pending_org_details.length === 0 ? (
-              <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>
-                <i data-lucide="check-circle" style={{ width: 20, height: 20, marginBottom: 8, display: 'block', margin: '0 auto 8px' }} />
-                All applications reviewed
-              </div>
-            ) : (
-              pending_org_details.map(org => (
-                <PendingOrgRow key={org.id} org={org} onApprove={load} />
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Top events by revenue */}
-        <div>
-          <SectionHead title="Top events by revenue" action="All events" to="/admin/events" />
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '4px 16px' }}>
-            {top_events.length === 0 ? (
-              <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>
-                No published events yet
-              </div>
-            ) : top_events.map((e, i) => {
-              const capPct = Math.min(Math.round((e.total_sold / e.capacity) * 100), 100);
-              return (
-                <div key={i} style={{ padding: '10px 0', borderBottom: i < top_events.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 5 }}>
-                    <div style={{ flex: 1, minWidth: 0, marginRight: 12 }}>
-                      <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {e.title}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
-                        {fmtDate(e.event_date)} · {e.total_sold}/{e.capacity} sold
-                      </div>
-                    </div>
-                    <strong style={{ fontSize: 13, color: 'var(--accent)', flexShrink: 0 }}>
-                      {fmtCurrency(e.revenue)}
-                    </strong>
-                  </div>
-                  <div style={{ background: 'var(--surface3)', borderRadius: 3, height: 3 }}>
-                    <div style={{ background: 'var(--accent)', height: '100%', borderRadius: 3, width: `${capPct}%`, transition: 'width 0.5s' }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Support overview + monthly chart ─────────────── */} 
-      <div className="responsive-grid-2" style={{ gap: 20 }}>
-        <div>
-          <SectionHead title="Support Overview" action="Open inbox" to="/admin/conflicts" />
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px' }}>
-            <div className="responsive-grid-4" style={{ gap: 12, marginBottom: 16 }}>
-              {[
-                { label: 'Open', value: supportMetrics.open || 0, color: 'var(--text)' },
-                { label: 'Escalated', value: supportMetrics.escalated || 0, color: 'var(--danger)' },
-                { label: 'Overdue', value: supportMetrics.overdue || 0, color: 'var(--warning)' },
-                { label: 'Unread', value: supportMetrics.unread_total || 0, color: 'var(--info)' },
-              ].map((item) => (
-                <div key={item.label} style={{ background: 'var(--surface2)', borderRadius: 10, padding: '12px 14px' }}>
-                  <div style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                    {item.label}
-                  </div>
-                  <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 20, fontWeight: 800, color: item.color }}>
-                    {item.value.toLocaleString()}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-              <Badge variant="red">Super Admin {supportLanes.super_admin || 0}</Badge>
-              <Badge variant="yellow">Organizer {supportLanes.organizer || 0}</Badge>
-              <Badge variant="blue">Due Soon {supportMetrics.due_soon || 0}</Badge>
-              <Badge variant="gray">Resolved {supportMetrics.resolved || 0}</Badge>
-            </div>
-            <div style={{ color: 'var(--text2)', fontSize: 12, lineHeight: 1.7 }}>
-              Use the inbox when escalations rise, unread volume climbs, or overdue threads appear. This panel tracks the support workload without leaving the dashboard.
-            </div>
-          </div>
-        </div>
-
-        {/* 6-month revenue chart + KPIs */}
-        <div>
-          <SectionHead title="Monthly revenue — 6 months" />
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px' }}>
-            <MiniBar data={monthly_revenue} valueKey="revenue" color="var(--info)" height={72} />
-            <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
-              <KpiRow label="Gross revenue (all time)"    value={fmtCurrency(stats.gross_revenue)} />
-              <KpiRow label="Platform revenue (all time)" value={fmtCurrency(stats.platform_revenue)} accent="var(--accent)" />
-              <KpiRow label="This week"                   value={fmtCurrency(stats.week_revenue)} sub={`${stats.week_orders} orders`} />
-              <KpiRow label="Today"                       value={fmtCurrency(stats.today_revenue)} sub={`${stats.today_orders} orders`} accent="var(--accent2)" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Third row: top organizers ──────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20 }}>
-
-        {/* Top organizers */}
-        <div>
-          <SectionHead title="Top organizers by revenue" action="All organizers" to="/admin/organizers" />
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 10, color: 'var(--text3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--border)' }}>Organizer</th>
-                  <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 10, color: 'var(--text3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--border)' }}>Events</th>
-                  <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 10, color: 'var(--text3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--border)' }}>Revenue</th>
-                </tr>
-              </thead>
-              <tbody>
-                {top_organizers.length === 0 ? (
-                  <tr><td colSpan={3} style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>No data yet</td></tr>
-                ) : top_organizers.map((o, i) => (
-                  <tr key={i} style={{ borderBottom: i < top_organizers.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                    <td style={{ padding: '10px 16px' }}>
-                      <div style={{ fontSize: 13, fontWeight: 500 }}>{o.company_name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>{o.commission}% commission</div>
-                    </td>
-                    <td style={{ padding: '10px 16px', textAlign: 'right', fontSize: 13, color: 'var(--text2)' }}>{o.event_count}</td>
-                    <td style={{ padding: '10px 16px', textAlign: 'right' }}>
-                      <strong style={{ fontSize: 13, color: 'var(--accent)' }}>{fmtCurrency(o.total_revenue)}</strong>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Recent transactions table ─────────────────────── */}
-      <div>
-        <SectionHead title="Recent transactions" action="View all" to="/admin/transactions" />
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                {['Order ref', 'Event', 'Attendee', 'Amount', 'Method', 'Status', 'Date'].map((h, i) => (
-                  <th key={i} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 10, color: 'var(--text3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {recent_orders.length === 0 ? (
-                <tr><td colSpan={7} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>No orders yet</td></tr>
-              ) : recent_orders.map((o, i) => (
-                <tr key={i} style={{ borderBottom: i < recent_orders.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                  <td style={{ padding: '11px 16px', fontFamily: 'monospace', fontSize: 11, color: 'var(--text2)' }}>{o.order_ref}</td>
-                  <td style={{ padding: '11px 16px', maxWidth: 160 }}>
-                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, fontWeight: 500 }}>{o.event_title}</div>
-                  </td>
-                  <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text2)' }}>{o.attendee_name}</td>
-                  <td style={{ padding: '11px 16px' }}><strong style={{ fontSize: 13 }}>{fmtCurrency(o.total)}</strong></td>
-                  <td style={{ padding: '11px 16px' }}>
-                    <Badge variant="blue">{(o.payment_method || 'mpesa').toUpperCase()}</Badge>
-                  </td>
-                  <td style={{ padding: '11px 16px' }}>
-                    <Badge variant={o.status === 'success' ? 'green' : o.status === 'pending' ? 'yellow' : o.status === 'refunded' ? 'orange' : 'red'}>
-                      {o.status}
-                    </Badge>
-                  </td>
-                  <td style={{ padding: '11px 16px', fontSize: 12, color: 'var(--text2)', whiteSpace: 'nowrap' }}>{fmtDate(o.created_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
+        )}
+      </section>
     </div>
   );
 }

@@ -32,7 +32,7 @@ export default function ResetPasswordPage() {
   };
 
   if (!token) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+    <div className="auth-shell">
       <div className="card" style={{ padding: 32, textAlign: 'center', maxWidth: 400 }}>
         <i data-lucide="link-2-off" style={{ width: 36, height: 36, color: 'var(--danger)', marginBottom: 12 }} />
         <div style={{ fontFamily: 'Syne', fontWeight: 600, marginBottom: 8 }}>Invalid link</div>
@@ -47,38 +47,30 @@ export default function ResetPasswordPage() {
   );
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ width: '100%', maxWidth: 400 }}>
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+    <div className="auth-shell">
+      <div className="auth-wrap">
+        <div className="auth-header" style={{ marginBottom: 32 }}>
+          <div className="auth-logo">
             <SanyLogo size={36} full />
           </div>
-          <h1 style={{ fontFamily: 'Syne', fontSize: 22, fontWeight: 700 }}>Choose a new password</h1>
+          <h1 className="auth-title">Choose a new password</h1>
         </div>
 
-        <div className="card" style={{ padding: 28 }}>
+        <div className="card auth-card">
           {done ? (
-            <div style={{ textAlign: 'center' }}>
-              <div style={{
-                width: 52, height: 52, background: 'var(--accent-dim)',
-                borderRadius: '50%', display: 'flex', alignItems: 'center',
-                justifyContent: 'center', margin: '0 auto 16px',
-              }}>
+            <div className="auth-center">
+              <div className="auth-icon-circle auth-icon-circle-success">
                 <i data-lucide="check-circle" style={{ width: 24, height: 24, color: 'var(--accent)' }} />
               </div>
-              <div style={{ fontFamily: 'Syne', fontWeight: 600, marginBottom: 8 }}>Password updated</div>
-              <p style={{ fontSize: 13, color: 'var(--text2)' }}>
+              <div className="auth-title" style={{ fontSize: 20, marginBottom: 8 }}>Password updated</div>
+              <p className="auth-subtitle">
                 Redirecting you to login…
               </p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <form onSubmit={handleSubmit} className="auth-form">
               {error && (
-                <div style={{
-                  background: 'var(--danger-dim)', border: '1px solid rgba(239,68,68,0.2)',
-                  borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--danger)',
-                  display: 'flex', alignItems: 'center', gap: 8,
-                }}>
+                <div className="auth-banner auth-banner-error" style={{ marginBottom: 0 }}>
                   <i data-lucide="circle-x" style={{ width: 14, height: 14, flexShrink: 0 }} />
                   {error}
                 </div>

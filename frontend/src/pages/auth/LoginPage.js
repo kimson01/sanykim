@@ -110,21 +110,21 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ width: '100%', maxWidth: 400 }}>
+    <div className="auth-shell">
+      <div className="auth-wrap">
 
         {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+        <div className="auth-header">
+          <div className="auth-logo">
             <SanyLogo size={36} full />
           </div>
-          <h1 style={{ fontFamily: 'Syne, sans-serif', fontSize: 24, fontWeight: 700 }}>Welcome back</h1>
-          <p style={{ color: 'var(--text2)', fontSize: 13, marginTop: 6 }}>
+          <h1 className="auth-title">Welcome back</h1>
+          <p className="auth-subtitle">
             Sign in to your Sany Adventures account
           </p>
         </div>
 
-        <div className="card" style={{ padding: 28 }}>
+        <div className="card auth-card">
           {/* Role selector */}
           <div className="pill-tabs" style={{ marginBottom: 20 }}>
             {['user', 'organizer', 'admin'].map(r => (
@@ -168,11 +168,7 @@ export default function LoginPage() {
 
           {/* Resent confirmation */}
           {resentOk && (
-            <div style={{
-              background: 'var(--accent-dim)', border: '1px solid rgba(201,162,39,0.2)',
-              borderRadius: 8, padding: '10px 14px', marginBottom: 16,
-              fontSize: 13, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 8,
-            }}>
+            <div className="auth-banner auth-banner-success">
               <i data-lucide="mail-check" style={{ width: 14, height: 14, flexShrink: 0 }} />
               Verification email sent — check your inbox.
             </div>
@@ -180,11 +176,7 @@ export default function LoginPage() {
 
           {/* General error */}
           {error && (
-            <div style={{
-              background: 'var(--danger-dim)', border: '1px solid rgba(239,68,68,0.2)',
-              borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--danger)',
-              display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16,
-            }}>
+            <div className="auth-banner auth-banner-error">
               <i data-lucide="circle-x" style={{ width: 14, height: 14, flexShrink: 0 }} />
               {error}
             </div>
@@ -192,17 +184,13 @@ export default function LoginPage() {
 
           {/* Terms accepted confirmation */}
           {acceptedOk && (
-            <div style={{
-              background: 'var(--accent-dim)', border: '1px solid rgba(201,162,39,0.2)',
-              borderRadius: 8, padding: '10px 14px', marginBottom: 16,
-              fontSize: 13, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 8,
-            }}>
+            <div className="auth-banner auth-banner-success">
               <i data-lucide="check-circle" style={{ width: 14, height: 14, flexShrink: 0 }} />
               Terms accepted. Sign in again to continue.
             </div>
           )}
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <form onSubmit={handleSubmit} className="auth-form">
             <div className="form-group">
               <label className="form-label">Email</label>
               <input
@@ -255,9 +243,9 @@ export default function LoginPage() {
               }
             </button>
 
-            <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text2)' }}>
+            <div className="auth-inline-note">
               Don't have an account?{' '}
-              <Link to={nextUrl ? `/register?next=${encodeURIComponent(nextUrl)}` : '/register'} style={{ color: 'var(--accent)' }}>
+              <Link to={nextUrl ? `/register?next=${encodeURIComponent(nextUrl)}` : '/register'} className="auth-inline-link">
                 Create one
               </Link>
             </div>
@@ -269,7 +257,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div style={{ textAlign: 'center', marginTop: 16 }}>
+        <div className="auth-center" style={{ marginTop: 16 }}>
           <Link to="/" className="btn btn-ghost btn-sm">
             <i data-lucide="arrow-left" style={{ width: 13, height: 13 }} /> Back to events
           </Link>

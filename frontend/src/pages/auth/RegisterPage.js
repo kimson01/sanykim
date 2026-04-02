@@ -438,27 +438,23 @@ export default function RegisterPage() {
   );
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ width: '100%', maxWidth: role === 'organizer' ? 520 : 480 }}>
+    <div className="auth-shell">
+      <div className={`auth-wrap ${role === 'organizer' ? 'auth-wrap-wide' : ''}`}>
         {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+        <div className="auth-header">
+          <div className="auth-logo">
             <SanyLogo size={36} full />
           </div>
-          <h1 style={{ fontFamily: 'Syne, sans-serif', fontSize: 22, fontWeight: 700 }}>
+          <h1 className="auth-title" style={{ fontSize: 22 }}>
             {role === 'organizer'
               ? ['Create organizer account', 'Business profile', 'Review & agree'][step - 1]
               : 'Create account'
             }
           </h1>
-          {role === 'organizer' && (
-            <p style={{ color: 'var(--text2)', fontSize: 12, marginTop: 6 }}>
-              Step {step} of 3
-            </p>
-          )}
+          {role === 'organizer' && <p className="auth-subtitle">Step {step} of 3</p>}
         </div>
 
-        <div className="card" style={{ padding: 28 }}>
+        <div className="card auth-card">
           {/* Role switcher — only show on step 1 */}
           {step === 1 && (
             <div className="pill-tabs responsive-pill-tabs" style={{ marginBottom: 20 }}>
@@ -475,7 +471,7 @@ export default function RegisterPage() {
 
           {/* Error banner */}
           {error && (
-            <div style={{ background: 'var(--danger-dim)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <div className="auth-banner auth-banner-error">
               <i data-lucide="circle-x" style={{ width: 14, height: 14, flexShrink: 0 }} /> {error}
             </div>
           )}
@@ -487,10 +483,10 @@ export default function RegisterPage() {
           {role === 'organizer' && step === 3 && OrgStep3()}
         </div>
 
-        <div style={{ textAlign: 'center', marginTop: 14 }}>
-          <span style={{ fontSize: 12, color: 'var(--text2)' }}>
+        <div className="auth-center" style={{ marginTop: 14 }}>
+          <span className="auth-inline-note">
             Already have an account?{' '}
-            <Link to={nextUrl ? `/login?next=${encodeURIComponent(nextUrl)}` : '/login'} style={{ color: 'var(--accent)' }}>
+            <Link to={nextUrl ? `/login?next=${encodeURIComponent(nextUrl)}` : '/login'} className="auth-inline-link">
               Sign in
             </Link>
           </span>

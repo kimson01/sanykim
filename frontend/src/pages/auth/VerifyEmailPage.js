@@ -44,23 +44,20 @@ export default function VerifyEmailPage() {
   };
 
   return (
-    <div style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center',
-      justifyContent: 'center', padding: 20, background: 'var(--bg)',
-    }}>
-      <div style={{ width: '100%', maxWidth: 440 }}>
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+    <div className="auth-shell">
+      <div className="auth-wrap">
+        <div className="auth-header">
+          <div className="auth-logo" style={{ marginBottom: 16 }}>
             <SanyLogo size={36} full />
           </div>
         </div>
 
-        <div className="card" style={{ padding: 32, textAlign: 'center' }}>
+        <div className="card auth-card auth-center" style={{ padding: 32 }}>
 
           {/* Verifying spinner */}
           {status === 'verifying' && (
             <>
-              <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <div className="auth-icon-circle auth-icon-circle-success" style={{ width: 56, height: 56 }}>
                 <i data-lucide="loader-2" style={{ width: 26, height: 26, color: 'var(--accent)' }} />
               </div>
               <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 18, marginBottom: 8 }}>
@@ -73,7 +70,7 @@ export default function VerifyEmailPage() {
           {/* Success */}
           {status === 'success' && (
             <>
-              <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <div className="auth-icon-circle auth-icon-circle-success" style={{ width: 56, height: 56 }}>
                 <i data-lucide="check-circle" style={{ width: 28, height: 28, color: 'var(--accent)' }} />
               </div>
               <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 20, marginBottom: 8, color: 'var(--accent)' }}>
@@ -91,7 +88,7 @@ export default function VerifyEmailPage() {
           {/* Expired — show resend form */}
           {status === 'expired' && (
             <>
-              <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--warning-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <div className="auth-icon-circle auth-icon-circle-warning" style={{ width: 56, height: 56 }}>
                 <i data-lucide="clock" style={{ width: 26, height: 26, color: 'var(--warning)' }} />
               </div>
               <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 18, marginBottom: 8 }}>
@@ -134,7 +131,7 @@ export default function VerifyEmailPage() {
           {/* Failed — invalid token */}
           {status === 'failed' && (
             <>
-              <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--danger-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <div className="auth-icon-circle auth-icon-circle-danger" style={{ width: 56, height: 56 }}>
                 <i data-lucide="x-circle" style={{ width: 26, height: 26, color: 'var(--danger)' }} />
               </div>
               <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 18, marginBottom: 8 }}>
@@ -173,7 +170,7 @@ export default function VerifyEmailPage() {
             </>
           )}
 
-          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+          <div className="auth-section">
             <Link to="/login" style={{ fontSize: 12, color: 'var(--text3)', textDecoration: 'none' }}>
               ← Back to sign in
             </Link>
