@@ -175,9 +175,8 @@ export default function AdminTransactions() {
   return (
     <>
       {summary && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
+        <div className="responsive-stats-strip" style={{
+          gap: 0,
           background: 'var(--surface)',
           border: '1px solid var(--border)',
           borderRadius: 12,
@@ -212,14 +211,9 @@ export default function AdminTransactions() {
         <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 600, marginBottom: 16 }}>
           All Transactions ({meta.total || txns.length})
         </div>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(200px, 2fr) repeat(6, minmax(120px, 1fr))',
-          gap: 12,
-          marginBottom: 16,
-        }}>
+        <div className="responsive-filter-grid" style={{ marginBottom: 16 }}>
           <input
-            className="input"
+            className="input filter-search-span-2"
             value={filters.q}
             onChange={setFilter('q')}
             placeholder="Search txn ref, order, attendee, event…"
@@ -274,7 +268,7 @@ export default function AdminTransactions() {
             </button>
           </div>
         </div>
-        <div className="table-wrap">
+        <div className="table-wrap responsive-table-shell">
           <table>
             <thead>
               <tr>
@@ -354,7 +348,7 @@ export default function AdminTransactions() {
           <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text3)', marginBottom: 12 }}>
             Platform Reconciliation
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          <div className="responsive-grid-3" style={{ gap: 12 }}>
             <div>
               <div style={{ fontSize: 11, color: 'var(--text3)' }}>Successful orders</div>
               <div style={{ fontSize: 16, fontWeight: 700 }}>{fmtCurrency(recon.orders_success_total)}</div>

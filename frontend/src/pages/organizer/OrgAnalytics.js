@@ -136,7 +136,7 @@ export default function OrgAnalytics() {
         />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+      <div className="responsive-grid-2" style={{ gap: 20, marginBottom: 20 }}>
 
         {/* ── Revenue chart ── */}
         <div className="card">
@@ -199,7 +199,7 @@ export default function OrgAnalytics() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+      <div className="responsive-grid-2" style={{ gap: 20 }}>
 
         {/* ── Ticket type breakdown ── */}
         <div className="card">

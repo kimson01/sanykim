@@ -155,7 +155,7 @@ export default function AdminLogs() {
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
+        <div className="responsive-header" style={{ marginBottom: 16 }}>
           <div>
             <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 600 }}>
               Admin Logs ({meta.total || rows.length})
@@ -169,12 +169,7 @@ export default function AdminLogs() {
           </div>
         </div>
 
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-          gap: 12,
-          marginBottom: 16,
-        }}>
+        <div className="responsive-grid-4" style={{ gap: 12, marginBottom: 16 }}>
           {[
             { label: 'All visible logs', value: meta.total || rows.length, sub: 'Current filtered result set', color: 'var(--text)' },
             { label: 'Admin actions', value: meta.sources?.admin || 0, sub: 'Platform-side actions', color: 'var(--danger)' },
@@ -193,14 +188,9 @@ export default function AdminLogs() {
           ))}
         </div>
 
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(220px, 2fr) repeat(4, minmax(120px, 1fr))',
-          gap: 12,
-          marginBottom: 16,
-        }}>
+        <div className="responsive-filter-grid" style={{ marginBottom: 16 }}>
           <input
-            className="input"
+            className="input filter-search-span-2"
             value={filters.q}
             onChange={setFilter('q')}
             placeholder="Search summary, actor, action, entity…"
@@ -243,7 +233,7 @@ export default function AdminLogs() {
           <input className="input" type="date" value={filters.date_to} onChange={setFilter('date_to')} />
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+        <div className="responsive-header" style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 12, color: 'var(--text2)' }}>
             Showing {rows.length} of {meta.total || rows.length} entries
           </div>
@@ -278,7 +268,7 @@ export default function AdminLogs() {
           </div>
         </div>
 
-        <div className="table-wrap">
+        <div className="table-wrap responsive-table-shell">
           <table>
             <thead>
               <tr>
@@ -356,11 +346,7 @@ export default function AdminLogs() {
       >
         {selectedRow && (
           <div style={{ display: 'grid', gap: 16 }}>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-              gap: 12,
-            }}>
+            <div className="responsive-grid-4" style={{ gap: 12 }}>
               <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
                 <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Source</div>
                 <div style={{ marginTop: 6 }}><Badge variant={sourceVariant[selectedRow.log_source] || 'gray'}>{sourceLabel[selectedRow.log_source] || selectedRow.log_source}</Badge></div>
@@ -386,7 +372,7 @@ export default function AdminLogs() {
             <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: 14 }}>
               <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Summary</div>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{selectedRow.summary}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, fontSize: 12 }}>
+              <div className="responsive-grid-2" style={{ gap: 12, fontSize: 12 }}>
                 <div>
                   <div style={{ color: 'var(--text3)' }}>Action</div>
                   <div style={{ fontFamily: 'monospace', marginTop: 4 }}>{selectedRow.action_type}</div>

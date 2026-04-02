@@ -4,6 +4,36 @@ import { authAPI } from '../api/client';
 
 const AuthContext = createContext(null);
 
+const normalizeUser = (user) => {
+  if (!user) return null;
+
+  if (user.organizer !== undefined) {
+    return {
+      ...user,
+      organizer: user.organizer
+        ? {
+            ...user.organizer,
+            company: user.organizer.company ?? user.organizer.company_name ?? null,
+            status: user.organizer.status ?? user.organizer.org_status ?? null,
+          }
+        : null,
+    };
+  }
+
+  const organizerId = user.organizer_id || user.organizerId || null;
+  return {
+    ...user,
+    organizer: organizerId
+      ? {
+          id: organizerId,
+          company: user.company_name ?? null,
+          status: user.org_status ?? user.organizer_status ?? null,
+          commission: user.commission ?? null,
+        }
+      : null,
+  };
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser]       = useState(null);
   const [loading, setLoading] = useState(true);
@@ -24,14 +54,15 @@ export const AuthProvider = ({ children }) => {
 
     // Optimistic: show the stored user immediately while we verify
     if (token && stored) {
-      try { setUser(JSON.parse(stored)); } catch (_) {}
+      try { setUser(normalizeUser(JSON.parse(stored))); } catch (_) {}
     }
 
     if (token) {
       authAPI.me()
         .then(({ data }) => {
-          setUser(data.user);
-          localStorage.setItem('ef_user', JSON.stringify(data.user));
+          const normalized = normalizeUser(data.user);
+          setUser(normalized);
+          localStorage.setItem('ef_user', JSON.stringify(normalized));
         })
         .catch(() => logout())
         .finally(() => setLoading(false));
@@ -42,18 +73,20 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     const { data } = await authAPI.login({ email, password });
+    const normalized = normalizeUser(data.user);
     localStorage.setItem('ef_token', data.token);
-    localStorage.setItem('ef_user', JSON.stringify(data.user));
-    setUser(data.user);
-    return data.user;
+    localStorage.setItem('ef_user', JSON.stringify(normalized));
+    setUser(normalized);
+    return normalized;
   };
 
   const register = async (payload) => {
     const { data } = await authAPI.register(payload);
+    const normalized = normalizeUser(data.user);
     localStorage.setItem('ef_token', data.token);
-    localStorage.setItem('ef_user', JSON.stringify(data.user));
-    setUser(data.user);
-    return data.user;
+    localStorage.setItem('ef_user', JSON.stringify(normalized));
+    setUser(normalized);
+    return normalized;
   };
 
   // Call after profile update to keep context and localStorage in sync

@@ -95,7 +95,7 @@ export default function AdminEvents() {
         </div>
       )}
       {/* Header + filter chips */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+      <div className="responsive-header" style={{ marginBottom: 16 }}>
         <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 15 }}>
           All Events
           <span style={{ color: 'var(--text3)', fontWeight: 400, fontSize: 13, marginLeft: 8 }}>
@@ -116,7 +116,7 @@ export default function AdminEvents() {
         </div>
       </div>
 
-      <div className="table-wrap">
+      <div className="table-wrap responsive-table-shell">
         <table>
           <thead>
             <tr>

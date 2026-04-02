@@ -761,6 +761,122 @@
     .topbar-title { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 600; }
     .page-content { padding: 24px; flex: 1; }
 
+    /* ── Shared responsive layout helpers ──────────────────── */
+    .responsive-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .responsive-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .topbar-account {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      min-width: 0;
+    }
+    .topbar-account-meta {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .topbar-account-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 140px;
+    }
+    .topbar-account-role {
+      font-size: 10px;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .responsive-grid-2,
+    .responsive-grid-3,
+    .responsive-grid-4,
+    .responsive-grid-6,
+    .responsive-stats-strip,
+    .responsive-filter-grid,
+    .responsive-split {
+      display: grid;
+      gap: 16px;
+    }
+    .responsive-grid-2,
+    .responsive-split {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .responsive-grid-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .responsive-grid-4,
+    .responsive-stats-strip {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .responsive-grid-6,
+    .responsive-filter-grid {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+    .responsive-filter-grid > * {
+      min-width: 0;
+    }
+    .responsive-filter-grid .filter-search-span-2 {
+      grid-column: span 2;
+    }
+    .responsive-table-shell {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .responsive-table-shell table {
+      min-width: 720px;
+    }
+    .responsive-inline-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .responsive-pill-tabs {
+      width: fit-content;
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    .mobile-only-action {
+      display: none !important;
+    }
+    .mobile-only-block {
+      display: none !important;
+    }
+    .desktop-only-block {
+      display: block !important;
+    }
+    .responsive-sticky-card {
+      position: sticky;
+      top: 76px;
+    }
+    .responsive-ticket-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .responsive-banner {
+      height: 320px;
+    }
+
     /* ── Stats ──────────────────────────────────────────────── */
     .stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
     .stat-card  { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px 20px; }
@@ -816,6 +932,8 @@
       padding: 0 32px; display: flex; align-items: center;
       justify-content: space-between; background: var(--bg);
       position: sticky; top: 0; z-index: 50;
+      gap: 16px;
+      flex-wrap: wrap;
     }
     .landing-hero {
       padding: 60px 32px 48px; text-align: center;
@@ -1028,6 +1146,67 @@
       .checkout-layout    { grid-template-columns: 1fr; }
       .main-content       { margin-left: 0; }
       .sidebar            { display: none !important; }
+      .topbar {
+        height: auto;
+        min-height: 56px;
+        padding: 12px 16px;
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .mobile-only-action {
+        display: inline-flex !important;
+      }
+      .mobile-only-block {
+        display: block !important;
+      }
+      .desktop-only-block {
+        display: none !important;
+      }
+      .page-content {
+        padding: 16px;
+      }
+      .responsive-grid-4,
+      .responsive-stats-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .responsive-grid-3,
+      .responsive-grid-6,
+      .responsive-filter-grid,
+      .responsive-grid-2,
+      .responsive-split {
+        grid-template-columns: 1fr;
+      }
+      .responsive-filter-grid .filter-search-span-2 {
+        grid-column: span 1;
+      }
+      .landing-nav {
+        height: auto;
+        padding: 14px 16px;
+      }
+      .landing-nav form {
+        width: 100%;
+        order: 3;
+      }
+      .landing-nav .search-bar {
+        flex: 1;
+      }
+      .landing-nav .search-bar input {
+        width: 100%;
+      }
+      .responsive-inline-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .responsive-sticky-card {
+        position: static;
+        top: auto;
+      }
+      .responsive-ticket-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .responsive-banner {
+        height: 240px;
+      }
       .support-shell      { grid-template-columns: 1fr; min-height: auto; }
       .support-sidebar    { min-height: calc(100vh - 140px); }
       .support-thread     { min-height: calc(100vh - 140px); }
@@ -1069,6 +1248,33 @@
       .landing-section    { padding: 24px 16px; }
       .landing-nav        { padding: 0 16px; }
       .stats-grid         { grid-template-columns: 1fr 1fr; }
+      .responsive-grid-4,
+      .responsive-stats-strip,
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+      .responsive-actions {
+        width: 100%;
+      }
+      .responsive-actions > * {
+        width: 100%;
+      }
+      .topbar-account {
+        width: 100%;
+        align-items: flex-start;
+      }
+      .topbar-account-name {
+        max-width: none;
+      }
+      .responsive-pill-tabs {
+        width: 100%;
+      }
+      .responsive-ticket-grid {
+        grid-template-columns: 1fr;
+      }
+      .responsive-banner {
+        height: 200px;
+      }
       .support-sidebar-header,
       .support-thread-header,
       .support-thread-sidepanel,

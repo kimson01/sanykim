@@ -20,6 +20,7 @@ export default function OrgEvents() {
   const [saving, setSaving]     = useState(false);
   const [loading, setLoading]   = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [loadingEdit, setLoadingEdit] = useState(false);
   const [preview, setPreview]   = useState('');
   const [kycWarning, setKycWarning] = useState('');
   const fileRef                 = useRef();
@@ -44,25 +45,47 @@ export default function OrgEvents() {
   const openCreate = () => {
     setEditId(null); setForm(emptyForm); setPreview(''); setModal(true);
   };
-  const openEdit = (e) => {
+  const openEdit = async (e) => {
+    setLoadingEdit(true);
     setEditId(e.id);
-    setForm({
-      title:         e.title,
-      description:   e.description || '',
-      category_id:   e.category_id || '',
-      location:      e.location,
-      location_type: e.location_type,
-      virtual_url:   e.virtual_url || '',
-      event_date:    e.event_date?.slice(0, 10) || '',
-      start_time:    e.start_time || '',
-      end_time:      e.end_time || '',
-      capacity:      e.capacity,
-      banner_url:    e.banner_url || '',
-      tags:          (e.tags || []).join(', '),
-      ticket_types:  [{ name: 'Regular', price: 0, quantity: 100, color: '#22c55e' }],
-    });
-    setPreview(resolveAssetUrl(e.banner_url || ''));
     setModal(true);
+    try {
+      const res = await eventsAPI.get(e.id);
+      const full = res.data.data;
+      const ticketTypes = Array.isArray(full.ticket_types) && full.ticket_types.length
+        ? full.ticket_types.map((tt) => ({
+            id: tt.id,
+            name: tt.name || '',
+            price: Number(tt.price || 0),
+            quantity: Number(tt.quantity || 0),
+            color: tt.color || '#22c55e',
+            description: tt.description || '',
+          }))
+        : emptyForm.ticket_types;
+
+      setForm({
+        title:         full.title || '',
+        description:   full.description || '',
+        category_id:   full.category_id || '',
+        location:      full.location || '',
+        location_type: full.location_type || 'physical',
+        virtual_url:   full.virtual_url || '',
+        event_date:    full.event_date?.slice(0, 10) || '',
+        start_time:    full.start_time || '',
+        end_time:      full.end_time || '',
+        capacity:      full.capacity || 500,
+        banner_url:    full.banner_url || '',
+        tags:          Array.isArray(full.tags) ? full.tags.join(', ') : '',
+        ticket_types:  ticketTypes,
+      });
+      setPreview(resolveAssetUrl(full.banner_url || ''));
+    } catch (err) {
+      setModal(false);
+      setEditId(null);
+      toast(err.response?.data?.message || 'Failed to load event details', 'error');
+    } finally {
+      setLoadingEdit(false);
+    }
   };
 
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -159,8 +182,8 @@ export default function OrgEvents() {
         await eventsAPI.update(editId, payload);
         toast('Event updated');
       } else {
-        await eventsAPI.create(payload);
-        toast('Event created');
+        const res = await eventsAPI.create(payload);
+        toast(res.data?.message || 'Event saved as draft');
       }
       setModal(false);
       load();
@@ -191,14 +214,14 @@ export default function OrgEvents() {
           <button className="btn btn-ghost btn-sm" onClick={() => setKycWarning('')}>Dismiss</button>
         </div>
       )}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+      <div className="responsive-actions" style={{ justifyContent: 'flex-end', marginBottom: 16 }}>
         <button className="btn btn-primary" onClick={openCreate}>
           <i data-lucide="plus" style={{ width: 14, height: 14 }} /> Create Event
         </button>
       </div>
 
-      <div className="card">
-        <div className="table-wrap">
+      <div className="card desktop-only-block">
+        <div className="table-wrap responsive-table-shell">
           <table>
             <thead>
               <tr>
@@ -258,6 +281,64 @@ export default function OrgEvents() {
         </div>
       </div>
 
+      <div className="mobile-only-block" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {events.length === 0 ? (
+          <div className="card" style={{ textAlign: 'center', color: 'var(--text3)', padding: 24 }}>
+            No events yet — create one above
+          </div>
+        ) : events.map((e) => (
+          <div key={e.id} className="card" style={{ padding: 16 }}>
+            <div className="responsive-header" style={{ marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                {e.banner_url
+                  ? <img src={resolveAssetUrl(e.banner_url)} alt="" style={{ width: 42, height: 42, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
+                  : <div style={{ width: 42, height: 42, background: 'var(--surface3)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <i data-lucide="image" style={{ width: 18, height: 18, color: 'var(--text3)' }} />
+                    </div>
+                }
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.title}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 3 }}>{fmtDate(e.event_date)}</div>
+                </div>
+              </div>
+              <Badge variant={e.status === 'published' ? 'green' : 'gray'}>{e.status}</Badge>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 12, marginBottom: 14 }}>
+              <div>
+                <div style={{ color: 'var(--text3)', marginBottom: 2 }}>Location</div>
+                <div style={{ color: 'var(--text2)' }}>{e.location}</div>
+              </div>
+              <div className="responsive-header">
+                <div>
+                  <div style={{ color: 'var(--text3)', marginBottom: 2 }}>Sold</div>
+                  <div style={{ fontWeight: 600 }}>{e.total_sold}/{e.capacity}</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ color: 'var(--text3)', marginBottom: 2 }}>Revenue</div>
+                  <div style={{ fontWeight: 700, color: 'var(--accent)' }}>{fmtCurrency(e.revenue || 0)}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="responsive-actions">
+              <button
+                className={`btn btn-sm ${e.status === 'published' ? 'btn-secondary' : 'btn-primary'}`}
+                onClick={() => toggleStatus(e)}
+              >
+                {e.status === 'published'
+                  ? <><i data-lucide="eye-off" style={{ width: 12, height: 12 }} /> Unpublish</>
+                  : <><i data-lucide="eye" style={{ width: 12, height: 12 }} /> Publish</>
+                }
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => openEdit(e)}>
+                <i data-lucide="pencil" style={{ width: 12, height: 12 }} /> Edit
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* ── Create / Edit modal ──────────────────────────────── */}
       <Modal
         open={modal}
@@ -265,6 +346,11 @@ export default function OrgEvents() {
         title={editId ? 'Edit Event' : 'Create Event'}
         size="lg"
       >
+        {loadingEdit ? (
+          <div style={{ padding: 32, textAlign: 'center', color: 'var(--text2)' }}>
+            <i data-lucide="loader-2" style={{ width: 22, height: 22 }} />
+          </div>
+        ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
           {/* Title */}
@@ -342,7 +428,7 @@ export default function OrgEvents() {
                 <img src={preview} alt="Banner preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
             )}
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className="responsive-actions">
               {/* File upload button */}
               <button
                 type="button"
@@ -385,7 +471,7 @@ export default function OrgEvents() {
           <hr className="divider" />
 
           {/* Ticket types */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+          <div className="responsive-header" style={{ marginBottom: 4 }}>
             <div style={{ fontFamily: 'Syne', fontWeight: 600 }}>Ticket types</div>
             <button className="btn btn-secondary btn-sm" onClick={addTT}>
               <i data-lucide="plus" style={{ width: 12, height: 12 }} /> Add type
@@ -393,7 +479,7 @@ export default function OrgEvents() {
           </div>
 
           {/* Column headers */}
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 32px', gap: 8 }}>
+          <div className="responsive-grid-4" style={{ gap: 8 }}>
             <span style={{ fontSize: 11, color: 'var(--text3)', paddingLeft: 4 }}>Name</span>
             <span style={{ fontSize: 11, color: 'var(--text3)' }}>Price (KSh)</span>
             <span style={{ fontSize: 11, color: 'var(--text3)' }}>Qty</span>
@@ -401,7 +487,7 @@ export default function OrgEvents() {
           </div>
 
           {form.ticket_types.map((tt, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 32px', gap: 8, alignItems: 'center' }}>
+            <div key={i} className="responsive-grid-4" style={{ gap: 8, alignItems: 'center' }}>
               <input
                 className="input"
                 placeholder="e.g. VIP"
@@ -427,6 +513,7 @@ export default function OrgEvents() {
                 onClick={() => removeTT(i)}
                 disabled={form.ticket_types.length === 1}
                 title="Remove"
+                style={{ justifySelf: 'start' }}
               >
                 <i data-lucide="trash-2" style={{ width: 12, height: 12 }} />
               </button>
@@ -448,6 +535,7 @@ export default function OrgEvents() {
             }
           </button>
         </div>
+        )}
       </Modal>
     </>
   );

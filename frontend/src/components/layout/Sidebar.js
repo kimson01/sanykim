@@ -39,8 +39,9 @@ export default function Sidebar({ role }) {
   const { user, logout } = useAuth();
   const navigate         = useNavigate();
   const nav        = role === 'admin' ? adminNav : role === 'organizer' ? orgNav : userNav;
-  const roleLabel  = role === 'admin' ? 'Super Admin' : role === 'organizer' ? 'Organizer' : 'Attendee';
-  const avatarClass = role === 'admin' ? 'avatar-orange' : role === 'organizer' ? 'avatar-blue' : 'avatar-green';
+  const effectiveRole = role === 'user' && user?.role === 'organizer' ? 'organizer' : role;
+  const roleLabel  = effectiveRole === 'admin' ? 'Super Admin' : effectiveRole === 'organizer' ? 'Organizer' : 'Attendee';
+  const avatarClass = effectiveRole === 'admin' ? 'avatar-orange' : effectiveRole === 'organizer' ? 'avatar-blue' : 'avatar-green';
 
   return (
     <aside className="sidebar">

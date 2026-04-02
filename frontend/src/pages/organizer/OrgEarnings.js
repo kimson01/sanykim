@@ -45,14 +45,14 @@ export default function OrgEarnings() {
   const platformFee   = gross - net;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 640 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, width: '100%', maxWidth: 760 }}>
 
       {/* Available balance — most important number */}
       <div style={{
         background: available > 0 ? 'var(--accent-dim)' : 'var(--surface)',
         border: `1px solid ${available > 0 ? 'rgba(34,197,94,0.25)' : 'var(--border)'}`,
         borderRadius: 14, padding: '24px 28px',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 20, flexWrap: 'wrap',
       }}>
         <div>
           <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 600 }}>
@@ -101,7 +101,7 @@ export default function OrgEarnings() {
           How your commission works
         </div>
         <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          <div className="responsive-inline-row" style={{ alignItems: 'flex-start' }}>
             <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 13, color: 'var(--accent)' }}>1</span>
             </div>
@@ -112,7 +112,7 @@ export default function OrgEarnings() {
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          <div className="responsive-inline-row" style={{ alignItems: 'flex-start' }}>
             <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 13, color: 'var(--accent)' }}>2</span>
             </div>
@@ -123,7 +123,7 @@ export default function OrgEarnings() {
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          <div className="responsive-inline-row" style={{ alignItems: 'flex-start' }}>
             <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 13, color: 'var(--accent)' }}>3</span>
             </div>
@@ -134,7 +134,7 @@ export default function OrgEarnings() {
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          <div className="responsive-inline-row" style={{ alignItems: 'flex-start' }}>
             <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--danger-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <i data-lucide="rotate-ccw" style={{ width: 14, height: 14, color: 'var(--danger)' }} />
             </div>

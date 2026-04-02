@@ -1,6 +1,7 @@
 // controllers/orderController.js
 const { query, queryOne, pool } = require('../config/db');
 const { v4: uuidv4 }            = require('uuid');
+const crypto                    = require('crypto');
 const { confirmOrderInDB }      = require('../utils/confirmOrderHelper');
 const { logPlatformEvent, getRequestMeta } = require('../utils/platformLogger');
 
@@ -28,6 +29,46 @@ const asBool = (v, fallback = true) => {
 const asPosInt = (v, fallback) => {
   const n = parseInt(v, 10);
   return Number.isFinite(n) && n > 0 ? n : fallback;
+};
+
+const parseNotes = (value) => {
+  if (!value) return {};
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch (_) {
+    return {};
+  }
+};
+
+const buildOrderRequestKey = ({
+  userId,
+  eventId,
+  attendeeName,
+  attendeeEmail,
+  attendeePhone,
+  promoCode,
+  items,
+}) => {
+  const normalizedItems = [...items]
+    .map((item) => ({
+      ticket_type_id: item.ticket_type_id,
+      quantity: Number(item.quantity || 0),
+    }))
+    .sort((a, b) => String(a.ticket_type_id).localeCompare(String(b.ticket_type_id)));
+
+  return crypto
+    .createHash('sha256')
+    .update(JSON.stringify({
+      user_id: userId,
+      event_id: eventId,
+      attendee_name: attendeeName.trim(),
+      attendee_email: attendeeEmail.trim().toLowerCase(),
+      attendee_phone: attendeePhone.trim(),
+      promo_code: (promoCode || '').trim().toUpperCase(),
+      items: normalizedItems,
+    }))
+    .digest('hex');
 };
 
 // ── POST /api/orders ─────────────────────────────────────────
@@ -133,6 +174,45 @@ const createOrder = async (req, res) => {
     const discountedSubtotal = subtotal - discount;
     const commissionAmt      = +(discountedSubtotal * Number(evRes.rows[0].commission) / 100).toFixed(2);
     const total              = discountedSubtotal;
+    const orderRequestKey = buildOrderRequestKey({
+      userId: req.user.id,
+      eventId: event_id,
+      attendeeName: attendee_name || req.user.name || '',
+      attendeeEmail: attendee_email || req.user.email || '',
+      attendeePhone: attendee_phone,
+      promoCode: promo_code,
+      items,
+    });
+
+    const existingPending = await client.query(
+      `SELECT id, order_ref, subtotal, total, notes
+       FROM orders
+       WHERE user_id = $1
+         AND event_id = $2
+         AND status = 'pending'
+         AND notes::jsonb ->> 'order_request_key' = $3
+         AND created_at >= NOW() - INTERVAL '30 minutes'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [req.user.id, event_id, orderRequestKey]
+    );
+    if (existingPending.rows[0]) {
+      const existing = existingPending.rows[0];
+      const notes = parseNotes(existing.notes);
+      await client.query('COMMIT');
+      return res.status(200).json({
+        success: true,
+        message: 'Reusing existing pending order',
+        data: {
+          order_id: existing.id,
+          order_ref: existing.order_ref,
+          subtotal: Number(existing.subtotal),
+          discount: Number(notes.promo_discount || 0),
+          total: Number(existing.total),
+        },
+      });
+    }
+
     const orderId = uuidv4();
     const orderPayload = [
       orderId,
@@ -149,6 +229,7 @@ const createOrder = async (req, res) => {
         ip: req.ip || null,
         user_agent: req.get('user-agent') || null,
         created_by: 'checkout',
+        order_request_key: orderRequestKey,
         promo_code_id: appliedPromo?.id || null,
         promo_code: appliedPromo?.code || null,
         promo_discount: appliedPromo?.discount || 0,

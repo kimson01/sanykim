@@ -697,6 +697,15 @@ const ALLOWED_SETTINGS = new Set([
   'trust_show_buyer_protection',
   'trust_show_trust_badges',
   'trust_buyer_protection_text',
+  'cms_home_eyebrow',
+  'cms_home_title',
+  'cms_home_title_highlight',
+  'cms_home_subtitle',
+  'cms_home_primary_cta_label',
+  'cms_home_primary_cta_url',
+  'cms_home_secondary_cta_label',
+  'cms_home_secondary_cta_url',
+  'cms_footer_tagline',
 ]);
 
 const BOOLEAN_SETTINGS = new Set([

@@ -246,7 +246,7 @@ export default function OrgScan() {
     <div style={{ maxWidth: 560, margin: '0 auto' }}>
 
       {/* Mode toggle */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+      <div className="responsive-actions" style={{ marginBottom: 20 }}>
         <button
           className={`btn ${!cameraOn ? 'btn-primary' : 'btn-secondary'}`}
           onClick={() => setCameraOn(false)}
@@ -291,7 +291,7 @@ export default function OrgScan() {
             <p style={{ fontSize: 13, color: 'var(--text2)', textAlign: 'center', margin: 0 }}>
               Enter a ticket code manually or switch to camera mode
             </p>
-            <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+            <div className="responsive-actions" style={{ width: '100%' }}>
               <input
                 className="input" style={{ flex: 1 }}
                 value={code}

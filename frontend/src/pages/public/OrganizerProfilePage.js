@@ -194,7 +194,7 @@ export default function OrganizerProfilePage() {
         padding:      '40px 24px 32px',
       }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, flexWrap: 'wrap' }}>
+          <div className="responsive-header" style={{ alignItems: 'flex-start', gap: 20 }}>
 
             {/* Avatar */}
             <div style={{
@@ -266,12 +266,7 @@ export default function OrganizerProfilePage() {
           </div>
 
           {/* Stats strip */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-            gap: 12,
-            marginTop: 28,
-          }}>
+          <div className="responsive-grid-3" style={{ gap: 12, marginTop: 28 }}>
             <StatPill icon="calendar"   label="Live events"     value={liveEvents.length}  color="var(--accent)" />
             <StatPill icon="history"    label="Past events"     value={pastEvents.length}   color="var(--info)" />
             <StatPill icon="users"      label="Total attendees" value={parseInt(profile.total_attendees || 0).toLocaleString()}    color="var(--accent2)" />
@@ -281,9 +276,9 @@ export default function OrganizerProfilePage() {
 
       {/* ── Events section ── */}
       <div className="landing-section" style={{ maxWidth: 900, margin: '0 auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div className="responsive-header" style={{ marginBottom: 20 }}>
           <h2 className="section-title">Events</h2>
-          <div className="pill-tabs">
+          <div className="pill-tabs responsive-pill-tabs">
             <div
               className={`pill-tab ${tab === 'upcoming' ? 'active' : ''}`}
               onClick={() => setTab('upcoming')}

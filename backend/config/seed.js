@@ -433,6 +433,15 @@ async function seed() {
       ['trust_show_buyer_protection', 'true'],
       ['trust_show_trust_badges', 'true'],
       ['trust_buyer_protection_text', 'Protected checkout: if payment succeeds and your ticket is not issued, contact support for priority resolution within 24 hours.'],
+      ['cms_home_eyebrow', 'Events across East Africa'],
+      ['cms_home_title', 'Your next experience'],
+      ['cms_home_title_highlight', 'starts here'],
+      ['cms_home_subtitle', 'Discover, book and attend the best events — music, tech, food, business and more.'],
+      ['cms_home_primary_cta_label', 'Explore Events'],
+      ['cms_home_primary_cta_url', '/'],
+      ['cms_home_secondary_cta_label', 'Become an Organizer'],
+      ['cms_home_secondary_cta_url', '/register'],
+      ['cms_footer_tagline', 'Adventure Ticketing for East Africa'],
     ];
     for (const [key, value] of settings) {
       await client.query(

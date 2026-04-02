@@ -1,11 +1,37 @@
 // src/pages/public/LandingPage.js
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { eventsAPI, categoriesAPI } from '../../api/client';
+import { eventsAPI, categoriesAPI, settingsAPI } from '../../api/client';
 import { fmtDate } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import SanyLogo from '../../components/ui/Logo';
 import ThemeControl from '../../components/ui/ThemeControl';
+
+const DEFAULT_CMS = {
+  platform_name: 'Sany Adventures',
+  cms_home_eyebrow: 'Events across East Africa',
+  cms_home_title: 'Your next experience',
+  cms_home_title_highlight: 'starts here',
+  cms_home_subtitle: 'Discover, book and attend the best events — music, tech, food, business and more.',
+  cms_home_primary_cta_label: 'Explore Events',
+  cms_home_primary_cta_url: '/',
+  cms_home_secondary_cta_label: 'Become an Organizer',
+  cms_home_secondary_cta_url: '/register',
+  cms_footer_tagline: 'Adventure Ticketing for East Africa',
+};
+
+function CmsLinkButton({ to, label, className }) {
+  if (!label || !to) return null;
+  const isInternal = /^\/(?!\/)/.test(to);
+  if (isInternal) {
+    return <Link to={to} className={className}>{label}</Link>;
+  }
+  return (
+    <a href={to} className={className} target="_blank" rel="noreferrer">
+      {label}
+    </a>
+  );
+}
 
 function EventCard({ event, onClick }) {
   const minPrice  = Number(event.min_price);
@@ -81,6 +107,7 @@ function EventCard({ event, onClick }) {
 export default function LandingPage() {
   const [events, setEvents]     = useState([]);
   const [cats, setCats]         = useState([]);
+  const [cms, setCms]           = useState(DEFAULT_CMS);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState('');
   const [category, setCategory] = useState('');
@@ -100,6 +127,9 @@ export default function LandingPage() {
     categoriesAPI.list()
       .then(r => setCats(r.data.data))
       .catch(() => setCats([]));
+    settingsAPI.public()
+      .then((r) => setCms((current) => ({ ...current, ...(r.data.data || {}) })))
+      .catch(() => setCms(DEFAULT_CMS));
   }, [load]);
 
   // ── Homepage OG meta tags ────────────────────────────────────
@@ -107,18 +137,21 @@ export default function LandingPage() {
   // card when someone shares the homepage URL.
   useEffect(() => {
     const baseUrl = window.location.origin;
+    const brand = cms.platform_name || DEFAULT_CMS.platform_name;
+    const heroTitle = [cms.cms_home_title, cms.cms_home_title_highlight].filter(Boolean).join(' ').trim() || `${brand} events`;
+    const heroDescription = cms.cms_home_subtitle || DEFAULT_CMS.cms_home_subtitle;
     const tags = [
       { property: 'og:type',        content: 'website' },
       { property: 'og:url',         content: baseUrl },
-      { property: 'og:title',       content: 'Sany Adventures — Adventure Ticketing for East Africa' },
-      { property: 'og:description', content: 'Discover and book tickets for hiking, trail runs, safaris, outdoor festivals and adventure events across East Africa. Powered by M-PESA.' },
+      { property: 'og:title',       content: `${brand} — ${heroTitle}` },
+      { property: 'og:description', content: heroDescription },
       { property: 'og:image',       content: `${baseUrl}/og-default.png` },
       { property: 'og:image:width', content: '1200' },
       { property: 'og:image:height',content: '630' },
-      { property: 'og:site_name',   content: 'Sany Adventures' },
+      { property: 'og:site_name',   content: brand },
       { name: 'twitter:card',        content: 'summary_large_image' },
-      { name: 'twitter:title',       content: 'Sany Adventures — Adventure Ticketing for East Africa' },
-      { name: 'twitter:description', content: 'Book tickets for adventure events across East Africa. M-PESA payments.' },
+      { name: 'twitter:title',       content: `${brand} — ${heroTitle}` },
+      { name: 'twitter:description', content: heroDescription },
       { name: 'twitter:image',       content: `${baseUrl}/og-default.png` },
     ];
     document.querySelectorAll('meta[data-og]').forEach(m => m.remove());
@@ -130,11 +163,11 @@ export default function LandingPage() {
       meta.setAttribute('content', content);
       document.head.appendChild(meta);
     });
-    document.title = 'Sany Adventures — Adventure Ticketing for East Africa';
+    document.title = `${brand} — ${heroTitle}`;
     return () => {
       document.querySelectorAll('meta[data-og]').forEach(m => m.remove());
     };
-  }, []);
+  }, [cms]);
 
   const filterByCategory = (slug) => {
     setCategory(slug);
@@ -188,12 +221,25 @@ export default function LandingPage() {
       {/* ── Hero ── */}
       <div className="landing-hero">
         <div className="hero-eyebrow">
-          <i data-lucide="map-pin" style={{ width: 11, height: 11 }} /> Events across East Africa
+          <i data-lucide="map-pin" style={{ width: 11, height: 11 }} /> {cms.cms_home_eyebrow || DEFAULT_CMS.cms_home_eyebrow}
         </div>
-        <h1 className="hero-title">Your next experience <span>starts here</span></h1>
-        <p className="hero-sub">
-          Discover, book and attend the best events — music, tech, food, business and more.
-        </p>
+        <h1 className="hero-title">
+          {cms.cms_home_title || DEFAULT_CMS.cms_home_title}{' '}
+          <span>{cms.cms_home_title_highlight || DEFAULT_CMS.cms_home_title_highlight}</span>
+        </h1>
+        <p className="hero-sub">{cms.cms_home_subtitle || DEFAULT_CMS.cms_home_subtitle}</p>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 24 }}>
+          <CmsLinkButton
+            to={cms.cms_home_primary_cta_url || DEFAULT_CMS.cms_home_primary_cta_url}
+            label={cms.cms_home_primary_cta_label || DEFAULT_CMS.cms_home_primary_cta_label}
+            className="btn btn-primary btn-lg"
+          />
+          <CmsLinkButton
+            to={cms.cms_home_secondary_cta_url || DEFAULT_CMS.cms_home_secondary_cta_url}
+            label={cms.cms_home_secondary_cta_label || DEFAULT_CMS.cms_home_secondary_cta_label}
+            className="btn btn-secondary btn-lg"
+          />
+        </div>
         {/* Category chips */}
         <div className="hero-filters">
           <div className={`filter-chip ${category === '' ? 'active' : ''}`} onClick={() => filterByCategory('')}>
@@ -247,7 +293,7 @@ export default function LandingPage() {
       }}>
         <SanyLogo size={28} full />
         <span style={{ fontSize: 12, color: 'var(--text3)' }}>
-          Adventure Ticketing for East Africa
+          {cms.cms_footer_tagline || DEFAULT_CMS.cms_footer_tagline}
         </span>
         <div style={{ display: 'flex', gap: 16 }}>
           <Link to="/customer-care" style={{ fontSize: 12, color: 'var(--text2)' }}>Customer care</Link>

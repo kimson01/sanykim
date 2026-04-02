@@ -297,10 +297,10 @@ export default function EventDetail() {
         </div>
       </nav>
 
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 20px' }}>
+        <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 20px' }}>
         {/* Banner */}
         {bannerUrl && (
-          <div style={{ borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 28, height: 320, position: 'relative' }}>
+          <div className="responsive-banner" style={{ borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: 28, position: 'relative' }}>
             <img
               src={bannerUrl}
               alt={event.title}
@@ -320,7 +320,7 @@ export default function EventDetail() {
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 32 }}>
+        <div className="responsive-grid-2" style={{ gap: 32 }}>
           {/* Left */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
@@ -387,7 +387,7 @@ export default function EventDetail() {
 
             {/* Social share strip */}
             <hr className="divider" />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="responsive-actions">
               <span style={{ fontSize: 13, color: 'var(--text2)' }}>Share this event:</span>
               <button onClick={share} className="btn btn-secondary btn-sm">
                 <i data-lucide="share-2" style={{ width: 13, height: 13 }} /> Share
@@ -412,7 +412,7 @@ export default function EventDetail() {
 
           {/* Right — sticky ticket panel */}
           <div>
-            <div className="card" style={{ position: 'sticky', top: 76 }}>
+            <div className="card responsive-sticky-card">
               <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 600, marginBottom: 16 }}>
                 Ticket Options
               </div>

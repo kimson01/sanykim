@@ -96,7 +96,7 @@ const getEvent = async (req, res) => {
     const event = await queryOne(
       `SELECT e.*, c.name AS category, c.slug AS category_slug,
               o.id AS organizer_id, o.company_name AS organizer_name,
-              o.slug AS organizer_slug,
+              o.slug AS organizer_slug, o.user_id AS organizer_user_id,
               u.name AS organizer_contact_name, u.email AS organizer_email
        FROM events e
        LEFT JOIN categories c ON c.id = e.category_id
@@ -107,10 +107,24 @@ const getEvent = async (req, res) => {
     );
     if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
 
+    const isOwner = req.user?.id === event.organizer_user_id;
+    const isAdmin = req.user?.role === 'admin';
+    const isPubliclyViewable = event.status === 'published';
+
+    if (!isPubliclyViewable && !isOwner && !isAdmin) {
+      return res.status(404).json({ success: false, message: 'Event not found' });
+    }
+
+    const canViewInactiveTickets =
+      isAdmin || isOwner;
+
     const tickets = await query(
       `SELECT id, name, price, quantity, sold, color, description, sale_start, sale_end, is_active
-       FROM ticket_types WHERE event_id = $1 ORDER BY price DESC`,
-      [event.id]
+       FROM ticket_types
+       WHERE event_id = $1
+         AND ($2::boolean = TRUE OR is_active = TRUE)
+       ORDER BY price DESC`,
+      [event.id, canViewInactiveTickets]
     );
 
     return res.json({
@@ -150,15 +164,16 @@ const createEvent = async (req, res) => {
 
     const eventId = uuidv4();
     const slug = slugify(title);
+    const initialStatus = req.user.role === 'admin' ? 'published' : 'draft';
 
     await query(
       `INSERT INTO events
          (id, organizer_id, category_id, title, slug, description, banner_url,
           location, location_type, virtual_url, event_date, start_time, end_time, capacity, tags, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'published')`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
       [eventId, org.id, category_id || null, title, slug, description || null,
        banner_url || null, location, location_type || 'physical', virtual_url || null,
-       event_date, start_time, end_time || null, capacity || 100, tags || []]
+       event_date, start_time, end_time || null, capacity || 100, tags || [], initialStatus]
     );
 
     // Insert ticket types
@@ -191,7 +206,9 @@ const createEvent = async (req, res) => {
     }).catch(() => {});
     return res.status(201).json({
       success: true,
-      message: 'Event created',
+      message: initialStatus === 'published'
+        ? 'Event created'
+        : 'Event saved as draft',
       data: normalizeEventRow(req, created),
     });
   } catch (err) {
@@ -212,7 +229,7 @@ const updateEvent = async (req, res) => {
     }
 
     const fields = ['title','description','location','location_type','virtual_url','event_date',
-                    'start_time','end_time','capacity','banner_url','status','category_id','tags'];
+                    'start_time','end_time','capacity','banner_url','category_id','tags'];
     const setClauses = [];
     const params = [];
 
@@ -230,21 +247,64 @@ const updateEvent = async (req, res) => {
 
     // Update ticket types if provided
     if (Array.isArray(updates.ticket_types)) {
-      // Simple replace strategy — delete and re-insert (preserving sold counts)
-      const existing = await query(`SELECT id, name, sold FROM ticket_types WHERE event_id = $1`, [id]);
-      const existingMap = {};
-      existing.rows.forEach(r => { existingMap[r.name] = r; });
+      const existing = await query(
+        `SELECT id, name, sold
+         FROM ticket_types
+         WHERE event_id = $1`,
+        [id]
+      );
+      const existingById = new Map(existing.rows.map((row) => [row.id, row]));
+      const seenIds = new Set();
 
       for (const tt of updates.ticket_types) {
-        if (existingMap[tt.name]) {
+        const ticketTypeId = tt.id && existingById.has(tt.id) ? tt.id : null;
+        const quantity = Number(tt.quantity || 0);
+        const price = Number(tt.price || 0);
+
+        if (ticketTypeId) {
+          const current = existingById.get(ticketTypeId);
+          if (quantity < Number(current.sold || 0)) {
+            return res.status(400).json({
+              success: false,
+              message: `Quantity for "${current.name}" cannot be lower than tickets already sold`,
+            });
+          }
           await query(
-            `UPDATE ticket_types SET price=$1, quantity=$2, color=$3 WHERE id=$4`,
-            [tt.price, tt.quantity, tt.color || '#22c55e', existingMap[tt.name].id]
+            `UPDATE ticket_types
+             SET name = $1,
+                 price = $2,
+                 quantity = $3,
+                 color = $4,
+                 description = $5,
+                 is_active = TRUE
+             WHERE id = $6`,
+            [
+              tt.name,
+              price,
+              quantity,
+              tt.color || '#22c55e',
+              tt.description || null,
+              ticketTypeId,
+            ]
           );
+          seenIds.add(ticketTypeId);
         } else {
           await query(
-            `INSERT INTO ticket_types (id, event_id, name, price, quantity, color) VALUES ($1,$2,$3,$4,$5,$6)`,
-            [uuidv4(), id, tt.name, tt.price, tt.quantity, tt.color || '#22c55e']
+            `INSERT INTO ticket_types
+               (id, event_id, name, price, quantity, color, description, is_active)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE)`,
+            [uuidv4(), id, tt.name, price, quantity, tt.color || '#22c55e', tt.description || null]
+          );
+        }
+      }
+
+      for (const current of existing.rows) {
+        if (!seenIds.has(current.id)) {
+          await query(
+            `UPDATE ticket_types
+             SET is_active = FALSE
+             WHERE id = $1`,
+            [current.id]
           );
         }
       }
@@ -349,6 +409,7 @@ const updateEventStatus = async (req, res) => {
   try {
     const event = await queryOne(
       `SELECT e.id, e.title, e.status AS previous_status, e.is_featured AS previous_is_featured, e.organizer_id,
+              o.user_id AS organizer_user_id,
               o.id_number, o.physical_address, o.terms_agreed
        FROM events e
        JOIN organizers o ON o.id = e.organizer_id
@@ -356,6 +417,19 @@ const updateEventStatus = async (req, res) => {
       [id]
     );
     if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
+
+    const isAdmin = req.user.role === 'admin';
+    const isOwner = event.organizer_user_id === req.user.id;
+
+    if (!isAdmin && !isOwner) {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+    if (is_featured !== undefined && !isAdmin) {
+      return res.status(403).json({ success: false, message: 'Only admins can mark events as featured' });
+    }
+    if (!isAdmin && status === 'completed') {
+      return res.status(403).json({ success: false, message: 'Only admins can mark events as completed' });
+    }
 
     if (status === 'published') {
       const enforceKyc = await getBooleanSetting('security_require_organizer_kyc', true);

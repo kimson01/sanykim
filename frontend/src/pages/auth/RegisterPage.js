@@ -325,7 +325,7 @@ export default function RegisterPage() {
         </select>
       </Field>
 
-      <div style={{ display: 'flex', gap: 10 }}>
+      <div className="responsive-actions">
         <button className="btn btn-secondary" onClick={() => setStep(1)} style={{ flex: 1, justifyContent: 'center' }}>
           <i data-lucide="arrow-left" style={{ width: 14, height: 14 }} /> Back
         </button>
@@ -418,7 +418,7 @@ export default function RegisterPage() {
         ))}
       </div>
 
-      <div style={{ display: 'flex', gap: 10 }}>
+      <div className="responsive-actions">
         <button className="btn btn-secondary" onClick={() => setStep(2)} style={{ flex: 1, justifyContent: 'center' }}>
           <i data-lucide="arrow-left" style={{ width: 14, height: 14 }} /> Back
         </button>
@@ -461,7 +461,7 @@ export default function RegisterPage() {
         <div className="card" style={{ padding: 28 }}>
           {/* Role switcher — only show on step 1 */}
           {step === 1 && (
-            <div className="pill-tabs" style={{ marginBottom: 20 }}>
+            <div className="pill-tabs responsive-pill-tabs" style={{ marginBottom: 20 }}>
               <div className={`pill-tab ${role === 'user' ? 'active' : ''}`} onClick={() => { setRole('user'); setStep(1); }}>
                 Attendee
               </div>

@@ -197,7 +197,16 @@ app.get('/api/settings/public', async (_req, res) => {
          'terms_and_conditions',
          'trust_show_buyer_protection',
          'trust_show_trust_badges',
-         'trust_buyer_protection_text'
+         'trust_buyer_protection_text',
+         'cms_home_eyebrow',
+         'cms_home_title',
+         'cms_home_title_highlight',
+         'cms_home_subtitle',
+         'cms_home_primary_cta_label',
+         'cms_home_primary_cta_url',
+         'cms_home_secondary_cta_label',
+         'cms_home_secondary_cta_url',
+         'cms_footer_tagline'
        )`
     );
     const data = {};

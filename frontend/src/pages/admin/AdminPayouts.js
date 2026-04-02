@@ -51,8 +51,7 @@ function LedgerModal({ org, onClose }) {
           ) : (
             <>
               {/* Summary strip */}
-              <div style={{
-                display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
+              <div className="responsive-grid-4" style={{
                 gap: 1, background: 'var(--border)', borderRadius: 10,
                 overflow: 'hidden', marginBottom: 20,
               }}>
@@ -368,8 +367,8 @@ export default function AdminPayouts() {
   return (
     <>
       {/* Summary strip */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
+      <div className="responsive-stats-strip" style={{
+        gap: 0,
         background: 'var(--surface)', border: '1px solid var(--border)',
         borderRadius: 12, overflow: 'hidden', marginBottom: 24,
       }}>
@@ -409,6 +408,7 @@ export default function AdminPayouts() {
           </h2>
         </div>
 
+        <div className="responsive-table-shell">
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
@@ -495,6 +495,7 @@ export default function AdminPayouts() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginTop: 24 }}>
@@ -502,13 +503,9 @@ export default function AdminPayouts() {
           <h2 style={{ fontFamily: 'Syne, sans-serif', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text3)', marginBottom: 14 }}>
             Payout history ({payoutMeta.total || payoutRows.length})
           </h2>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(200px, 2fr) repeat(5, minmax(120px, 1fr))',
-            gap: 12,
-          }}>
+          <div className="responsive-filter-grid">
             <input
-              className="input"
+              className="input filter-search-span-2"
               value={filters.q}
               onChange={setFilter('q')}
               placeholder="Search organizer, reference, note…"
@@ -535,6 +532,7 @@ export default function AdminPayouts() {
           </div>
         </div>
 
+        <div className="responsive-table-shell">
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
@@ -591,6 +589,7 @@ export default function AdminPayouts() {
             ))}
           </tbody>
         </table>
+        </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '14px 16px', borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
           <div style={{ fontSize: 12, color: 'var(--text2)' }}>

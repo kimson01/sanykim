@@ -15,6 +15,24 @@ const signToken = (user) =>
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   });
 
+const toAuthUser = (row) => ({
+  id: row.id,
+  name: row.name,
+  email: row.email,
+  role: row.role,
+  phone: row.phone || null,
+  email_verified: row.email_verified,
+  created_at: row.created_at,
+  organizer: row.organizer_id
+    ? {
+        id: row.organizer_id,
+        company: row.company_name,
+        status: row.org_status,
+        commission: row.commission,
+      }
+    : null,
+});
+
 const getBooleanSetting = async (key, fallback = true) => {
   try {
     const row = await queryOne(`SELECT value FROM platform_settings WHERE key = $1`, [key]);
@@ -107,7 +125,14 @@ const register = async (req, res) => {
         .catch(e => console.error('[register] verify email error:', e.message));
     });
 
-    const user  = await queryOne(`SELECT id, name, email, role FROM users WHERE id = $1`, [userId]);
+    const user = await queryOne(
+      `SELECT u.id, u.name, u.email, u.phone, u.role, u.email_verified, u.created_at,
+              o.id AS organizer_id, o.company_name, o.status AS org_status, o.commission
+       FROM users u
+       LEFT JOIN organizers o ON o.user_id = u.id
+       WHERE u.id = $1`,
+      [userId]
+    );
     const token = signToken(user);
 
     await logPlatformEvent({
@@ -130,7 +155,7 @@ const register = async (req, res) => {
       token,
       email_verification_required: true,
       ...(process.env.NODE_ENV !== 'production' && { dev_verify_url: verifyUrl }),
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      user: toAuthUser(user),
     });
   } catch (err) {
     console.error('register:', err.message);
@@ -472,7 +497,7 @@ const getMe = async (req, res) => {
        WHERE u.id = $1`,
       [req.user.id]
     );
-    return res.json({ success: true, user });
+    return res.json({ success: true, user: toAuthUser(user) });
   } catch (err) {
     console.error('getMe:', err.message);
     return res.status(500).json({ success: false, message: 'Server error' });

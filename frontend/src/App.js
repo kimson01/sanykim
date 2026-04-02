@@ -101,6 +101,7 @@ export default function App() {
             <Route path="conflicts"      element={<AdminConflicts />} />
             <Route path="settings"       element={<AdminSettings />} />
             <Route path="payouts"        element={<AdminPayouts />} />
+            <Route path="profile"        element={<UserProfile />} />
           </Route>
 
           {/* Organizer */}
@@ -112,6 +113,7 @@ export default function App() {
             <Route path="analytics"    element={<OrgAnalytics />} />
             <Route path="earnings"     element={<OrgEarnings />} />
             <Route path="conflicts"    element={<OrgConflicts />} />
+            <Route path="profile"      element={<UserProfile />} />
           </Route>
 
           {/* User */}

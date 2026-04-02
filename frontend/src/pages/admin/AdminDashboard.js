@@ -205,7 +205,7 @@ export default function AdminDashboard() {
       )}
 
       {/* ── Top metrics row — borderless inline stats ─────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+      <div className="responsive-stats-strip" style={{ gap: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
         {[
           { label: 'Platform revenue',  value: fmtCurrency(stats.platform_revenue), sub: `from ${fmtCurrency(stats.gross_revenue)} gross`, color: 'var(--accent)', icon: 'trending-up' },
           { label: 'Tickets sold',       value: stats.total_tickets_sold.toLocaleString(), sub: `across ${stats.total_events} events`, color: 'var(--info)', icon: 'ticket' },
@@ -231,7 +231,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* ── Main grid: chart + order status + weekly ──────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20 }}>
+      <div className="responsive-grid-2" style={{ gap: 20 }}>
 
         {/* Revenue chart — 14-day */}
         <div>
@@ -297,7 +297,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* ── Second row: pending orgs + top events ─────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+      <div className="responsive-grid-2" style={{ gap: 20 }}>
 
         {/* Pending organizer applications */}
         <div>
@@ -356,11 +356,11 @@ export default function AdminDashboard() {
       </div>
 
       {/* ── Support overview + monthly chart ─────────────── */} 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+      <div className="responsive-grid-2" style={{ gap: 20 }}>
         <div>
           <SectionHead title="Support Overview" action="Open inbox" to="/admin/conflicts" />
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
+            <div className="responsive-grid-4" style={{ gap: 12, marginBottom: 16 }}>
               {[
                 { label: 'Open', value: supportMetrics.open || 0, color: 'var(--text)' },
                 { label: 'Escalated', value: supportMetrics.escalated || 0, color: 'var(--danger)' },

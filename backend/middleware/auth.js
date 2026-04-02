@@ -118,6 +118,45 @@ const authenticate = async (req, res, next) => {
   }
 };
 
+const optionalAuthenticate = async (req, _res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return next();
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    let user = getCachedUser(decoded.id);
+    if (!user) {
+      user = await getSharedCachedUser(decoded.id);
+      if (user) setCachedUser(decoded.id, user);
+    }
+
+    if (!user) {
+      user = await queryOne(
+        `SELECT u.id, u.name, u.email, u.role, u.is_active,
+                o.status AS organizer_status, o.terms_agreed
+         FROM users u
+         LEFT JOIN organizers o ON o.user_id = u.id
+         WHERE u.id = $1`,
+        [decoded.id]
+      );
+      if (user) {
+        setCachedUser(decoded.id, user);
+        setSharedCachedUser(decoded.id, user).catch(() => {});
+      }
+    }
+
+    if (user && user.is_active) {
+      req.user = user;
+    }
+  } catch (_) {}
+
+  next();
+};
+
 // ── Role guards ───────────────────────────────────────────────
 const requireRole = (...roles) => (req, res, next) => {
   if (!req.user) return res.status(401).json({ success: false, message: 'Not authenticated' });
@@ -134,5 +173,6 @@ const requireUser      = requireRole('user', 'organizer', 'admin');
 module.exports = {
   authenticate, requireRole,
   requireAdmin, requireOrganizer, requireUser,
+  optionalAuthenticate,
   clearUserCache,
 };

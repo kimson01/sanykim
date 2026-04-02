@@ -72,7 +72,7 @@ export default function UserDashboard() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
       {/* Greeting */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className="responsive-header">
         <div>
           <h1 style={{ fontFamily: 'Syne, sans-serif', fontSize: 20, fontWeight: 700, marginBottom: 2 }}>
             Hello, {user?.name?.split(' ')[0]} 👋
@@ -85,8 +85,8 @@ export default function UserDashboard() {
       </div>
 
       {/* Metrics strip — single bordered row, no individual cards */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
+      <div className="responsive-stats-strip" style={{
+        gap: 0,
         background: 'var(--surface)', border: '1px solid var(--border)',
         borderRadius: 12, overflow: 'hidden',
       }}>
@@ -104,9 +104,9 @@ export default function UserDashboard() {
 
       {/* Tickets section with tab toggle */}
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div className="responsive-header" style={{ marginBottom: 14 }}>
           <h2 style={{ fontFamily: 'Syne, sans-serif', fontSize: 15, fontWeight: 700 }}>My Tickets</h2>
-          <div className="pill-tabs">
+          <div className="pill-tabs responsive-pill-tabs">
             <div className={`pill-tab ${tab === 'upcoming' ? 'active' : ''}`} onClick={() => setTab('upcoming')}>
               Upcoming ({upcoming.length})
             </div>
@@ -185,7 +185,7 @@ export default function UserDashboard() {
 
       {/* Recent orders */}
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <div className="responsive-header" style={{ marginBottom: 14 }}>
           <h2 style={{ fontFamily: 'Syne, sans-serif', fontSize: 15, fontWeight: 700 }}>Recent orders</h2>
           <Link to="/dashboard/history" style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none' }}>
             View all →

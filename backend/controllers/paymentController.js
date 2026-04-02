@@ -96,6 +96,15 @@ const stkPush = async (req, res) => {
     const mpesaData = await mpesaRes.json();
 
     if (mpesaData.ResponseCode !== '0') {
+      await queryOne(
+        `UPDATE orders
+         SET status = 'failed', updated_at = NOW()
+         WHERE id = $1
+           AND status = 'pending'`,
+        [order.id]
+      ).catch((e) => {
+        console.error('stkPush mark-failed:', e.message);
+      });
       return res.status(400).json({
         success: false,
         message: mpesaData.CustomerMessage || 'STK push failed',
@@ -145,6 +154,13 @@ const stkPush = async (req, res) => {
     });
   } catch (err) {
     console.error('stkPush:', err.message);
+    await queryOne(
+      `UPDATE orders
+       SET status = 'failed', updated_at = NOW()
+       WHERE id = $1
+         AND status = 'pending'`,
+      [order_id]
+    ).catch(() => {});
     await logPlatformEvent({
       actorUserId: req.user?.id || null,
       actorRole: req.user?.role || 'user',
@@ -255,6 +271,17 @@ const mpesaCallback = async (req, res) => {
   const paidAmount = asMoney(amount);
   const expectedAmount = Math.ceil(Number(order.total));
   if (paidAmount === null || paidAmount !== expectedAmount) {
+    try {
+      await queryOne(
+        `UPDATE orders
+         SET status = 'failed', updated_at = NOW()
+         WHERE id = $1
+           AND status = 'pending'`,
+        [order.id]
+      );
+    } catch (e) {
+      console.error('mpesaCallback amount-mismatch mark-failed:', e.message);
+    }
     await logPlatformEvent({
       actorRole: 'system',
       domain: 'payment',
@@ -301,6 +328,17 @@ const mpesaCallback = async (req, res) => {
   } catch (e) {
     await client.query('ROLLBACK');
     console.error('mpesaCallback confirmOrder:', e.message);
+    try {
+      await queryOne(
+        `UPDATE orders
+         SET status = 'failed', updated_at = NOW()
+         WHERE id = $1
+           AND status = 'pending'`,
+        [order.id]
+      );
+    } catch (markErr) {
+      console.error('mpesaCallback confirmOrder mark-failed:', markErr.message);
+    }
     await logPlatformEvent({
       actorRole: 'system',
       domain: 'payment',

@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import SanyLogo from '../../components/ui/Logo';
 
 const STEPS = ['Select Tickets', 'Your Details', 'Payment', 'Confirmation'];
+const pendingOrderStorageKey = (eventId) => `ef_pending_order_${eventId}`;
 
 // ── Steps indicator ───────────────────────────────────────────
 function StepsBar({ active }) {
@@ -43,7 +44,7 @@ function OrderSummary({ event, selections, discount, promoApplied }) {
   const total = Math.max(0, subtotal - (discount || 0));
 
   return (
-    <div className="card" style={{ position: 'sticky', top: 76 }}>
+    <div className="card responsive-sticky-card">
       <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 600, marginBottom: 14 }}>Order Summary</div>
       {event?.banner_url && (
         <img
@@ -158,6 +159,61 @@ export default function CheckoutPage() {
   const pollRef   = useRef(null);
   const timerRef  = useRef(null);
 
+  const clearPendingOrder = () => {
+    if (id) sessionStorage.removeItem(pendingOrderStorageKey(id));
+  };
+
+  const savePendingOrder = (nextOrderId) => {
+    if (!id || !nextOrderId) return;
+    sessionStorage.setItem(pendingOrderStorageKey(id), nextOrderId);
+  };
+
+  const resumePolling = (existingOrderId, emailOverride) => {
+    stopPolling();
+    setOrderId(existingOrderId);
+    setStep(3);
+    setMpesaPhase('polling');
+    setPollSeconds(0);
+    setLoading(false);
+    setError('');
+
+    const MAX_WAIT_SECS = 90;
+    const POLL_INTERVAL = 4000;
+    let elapsed = 0;
+
+    timerRef.current = setInterval(() => {
+      elapsed += 1;
+      setPollSeconds(elapsed);
+      if (elapsed >= MAX_WAIT_SECS) {
+        stopPolling();
+        setMpesaPhase('failed');
+        setError('Payment timed out — check My Tickets before trying again.');
+      }
+    }, 1000);
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const statusRes = await ordersAPI.status(existingOrderId);
+        const { status, order_ref, tickets: t } = statusRes.data.data;
+
+        if (status === 'success') {
+          stopPolling();
+          clearPendingOrder();
+          setMpesaPhase('done');
+          setTickets(t || []);
+          setOrderRef(order_ref);
+          setConfirmedEmail(emailOverride || details.email.trim());
+          setStep(4);
+        } else if (status === 'failed') {
+          stopPolling();
+          clearPendingOrder();
+          setMpesaPhase('failed');
+          setError('Payment was declined, cancelled, or expired. Please try again.');
+        }
+      } catch (_) {}
+    }, POLL_INTERVAL);
+  };
+
   useEffect(() => {
     eventsAPI.get(id)
       .then(r => {
@@ -184,6 +240,11 @@ export default function CheckoutPage() {
         email: user.email || d.email,
         phone: user.phone || d.phone,
       }));
+    }
+
+    const pendingOrderId = sessionStorage.getItem(pendingOrderStorageKey(id));
+    if (pendingOrderId) {
+      resumePolling(pendingOrderId, user?.email || '');
     }
   }, [id]);
 
@@ -292,6 +353,7 @@ export default function CheckoutPage() {
         total: serverTotal = total,
       } = orderRes.data.data;
       setOrderId(order_id);
+      savePendingOrder(order_id);
       setDiscount(serverDiscount);
       if (promoApplied && Number(serverDiscount) <= 0) {
         setPromoError('Promo code was not applied to this order');
@@ -307,6 +369,7 @@ export default function CheckoutPage() {
       if (isFree) {
         // ── Free event: confirm immediately with no payment ──
         const confirmRes = await ordersAPI.confirm(order_id, { method: 'free' });
+        clearPendingOrder();
         setTickets(confirmRes.data.data.tickets || []);
         setOrderRef(confirmRes.data.data.order_ref);
         setConfirmedEmail(details.email.trim());
@@ -318,53 +381,14 @@ export default function CheckoutPage() {
         // ── PRODUCTION M-PESA: STK Push → poll for callback ──
         setMpesaPhase('waiting');
         await paymentsAPI.stkPush({ order_id, phone: details.phone.trim() });
-        setMpesaPhase('polling');
-        setLoading(false); // release button lock; UI shows polling state
-
-        const MAX_WAIT_SECS = 90; // Safaricom callback window
-        const POLL_INTERVAL = 4000;
-        let elapsed = 0;
-
-        // Countdown timer
-        timerRef.current = setInterval(() => {
-          elapsed += 1;
-          setPollSeconds(elapsed);
-          if (elapsed >= MAX_WAIT_SECS) {
-            stopPolling();
-            setMpesaPhase('failed');
-            setError('Payment timed out — if you entered your PIN, please wait a minute and check My Tickets before trying again.');
-          }
-        }, 1000);
-
-        // Status polling
-        pollRef.current = setInterval(async () => {
-          try {
-            const statusRes = await ordersAPI.status(order_id);
-            const { status, order_ref, tickets: t } = statusRes.data.data;
-
-            if (status === 'success') {
-              stopPolling();
-              setMpesaPhase('done');
-              setTickets(t || []);
-              setOrderRef(order_ref);
-              setConfirmedEmail(details.email.trim());
-              setStep(4);
-            } else if (status === 'failed') {
-              stopPolling();
-              setMpesaPhase('failed');
-              setError('Payment was declined or cancelled. Please try again.');
-            }
-            // status === 'pending' → keep polling
-          } catch (_) {
-            // network hiccup — keep polling
-          }
-        }, POLL_INTERVAL);
+        resumePolling(order_id, details.email.trim());
 
       } else {
         // ── DEV / SIMULATION: instant confirm ────────────────
         const simRes  = await paymentsAPI.simulate({ order_id });
         const txnRef  = simRes.data.data.txn_ref;
         const confirmRes = await ordersAPI.confirm(order_id, { txn_ref: txnRef, method: payMethod });
+        clearPendingOrder();
         setTickets(confirmRes.data.data.tickets || []);
         setOrderRef(confirmRes.data.data.order_ref);
         setConfirmedEmail(details.email.trim());
@@ -374,6 +398,7 @@ export default function CheckoutPage() {
     } catch (err) {
       stopPolling();
       setMpesaPhase('idle');
+      clearPendingOrder();
       setError(err.response?.data?.message || 'Payment failed — please try again');
     } finally {
       // loading stays true only when polling (it was set to false inside the polling branch)
@@ -422,7 +447,7 @@ export default function CheckoutPage() {
           {step === 4 ? 'Close' : 'Back'}
         </button>
         <SanyLogo size={28} full />
-        <div style={{ width: 80 }} />
+        <div style={{ width: 80, maxWidth: '100%' }} />
       </nav>
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 20px' }}>
@@ -467,7 +492,7 @@ export default function CheckoutPage() {
                 })}
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24 }}>
+              <div className="responsive-actions" style={{ justifyContent: 'flex-end', marginTop: 24 }}>
                 <button className="btn btn-primary btn-lg" onClick={goStep2}>
                   Continue <i data-lucide="arrow-right" style={{ width: 15, height: 15 }} />
                 </button>
@@ -520,7 +545,7 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+              <div className="responsive-actions" style={{ justifyContent: 'flex-end', marginTop: 20 }}>
                 <button className="btn btn-primary btn-lg" onClick={goStep3}>
                   Continue to payment <i data-lucide="arrow-right" style={{ width: 15, height: 15 }} />
                 </button>
@@ -569,7 +594,7 @@ export default function CheckoutPage() {
                     </div>
                   ) : (
                     <div>
-                      <div style={{ display: 'flex', gap: 8 }}>
+                      <div className="responsive-actions" style={{ alignItems: 'stretch' }}>
                         <input
                           className="input"
                           value={promoInput}
@@ -701,7 +726,7 @@ export default function CheckoutPage() {
               )}
 
               {mpesaPhase !== 'polling' && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+                <div className="responsive-actions" style={{ justifyContent: 'flex-end', marginTop: 20 }}>
                   <button
                     className="btn btn-primary btn-lg"
                     onClick={processPayment}
@@ -754,7 +779,7 @@ export default function CheckoutPage() {
             </div>
 
             {/* Actions */}
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 32, flexWrap: 'wrap' }}>
+            <div className="responsive-actions" style={{ justifyContent: 'center', marginTop: 32 }}>
               <Link to="/" className="btn btn-secondary">
                 <i data-lucide="arrow-left" style={{ width: 14, height: 14 }} /> Browse events
               </Link>
@@ -776,7 +801,7 @@ function TicketCard({ ticket, event }) {
   return (
     <div className="ticket-card">
       <div className="ticket-header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="responsive-header">
           <div>
             <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 700 }}>{event.title}</div>
             <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>{event.organizer_name}</div>
@@ -786,7 +811,7 @@ function TicketCard({ ticket, event }) {
       </div>
       <div className="ticket-dashed" />
       <div className="ticket-body">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+        <div className="responsive-ticket-grid">
           <div>
             <div className="form-label">Date</div>
             <div style={{ fontSize: 13, fontWeight: 500 }}>{fmtDate(event.event_date)}</div>

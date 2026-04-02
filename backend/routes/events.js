@@ -4,7 +4,7 @@ const {
   getEvents, getEvent, createEvent, updateEvent,
   updateEventStatus, deleteEvent, getMyEvents,
 } = require('../controllers/eventController');
-const { authenticate, requireOrganizer, requireAdmin } = require('../middleware/auth');
+const { authenticate, optionalAuthenticate, requireOrganizer, requireAdmin } = require('../middleware/auth');
 const {
   createEventRules, updateEventRules, validate,
 } = require('../middleware/validate');
@@ -19,8 +19,8 @@ router.post('/',              authenticate, requireOrganizer, createEventRules, 
 router.put('/:id',            authenticate, requireOrganizer, updateEventRules,  validate, updateEvent);
 router.delete('/:id',         authenticate, requireOrganizer, deleteEvent);
 
-// Admin only — status/feature toggle
-router.patch('/:id/status', authenticate, requireAdmin,
+// Organizer/admin — status toggle, with feature flag restricted in controller
+router.patch('/:id/status', authenticate, requireOrganizer,
   [
     param('id').isUUID().withMessage('Invalid event ID'),
     body('status').optional().isIn(['draft','published','cancelled','completed']).withMessage('Invalid status'),
@@ -31,6 +31,6 @@ router.patch('/:id/status', authenticate, requireAdmin,
 );
 
 // Public — single event (must be after specific paths)
-router.get('/:idOrSlug', getEvent);
+router.get('/:idOrSlug', optionalAuthenticate, getEvent);
 
 module.exports = router;

@@ -53,13 +53,13 @@ export default function AdminUsers() {
 
   return (
     <div className="card">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+      <div className="responsive-header" style={{ marginBottom: 16 }}>
         <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 15 }}>
           All Users <span style={{ color: 'var(--text3)', fontWeight: 400, fontSize: 13 }}>({users.length})</span>
         </div>
       </div>
 
-      <div className="table-wrap">
+      <div className="table-wrap responsive-table-shell">
         <table>
           <thead>
             <tr>

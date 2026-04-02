@@ -76,7 +76,7 @@ export default function OrgDashboard() {
           <StatCard label="Net Revenue"    value={fmtCurrency(stats.net_revenue)} icon="dollar-sign" color="var(--accent)" bg="var(--accent-dim)" sub="After platform fee" />
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+      <div className="responsive-header" style={{ marginBottom: 16 }}>
         <h2 style={{ fontFamily: 'Syne', fontSize: 17, fontWeight: 600 }}>My Events</h2>
         <Link to="/organizer/events" className="btn btn-primary btn-sm">
           <i data-lucide="plus" style={{ width: 14, height: 14 }} /> New Event

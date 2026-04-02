@@ -27,6 +27,18 @@ const SAMPLE_TERMS = `Organizer Terms & Conditions (Sample)
 - Repeated policy violations may lead to suspension or permanent removal.
 `;
 
+const SAMPLE_HOMEPAGE_CMS = {
+  cms_home_eyebrow: 'Events across East Africa',
+  cms_home_title: 'Your next experience',
+  cms_home_title_highlight: 'starts here',
+  cms_home_subtitle: 'Discover, book and attend the best events — music, tech, food, business and more.',
+  cms_home_primary_cta_label: 'Explore Events',
+  cms_home_primary_cta_url: '/',
+  cms_home_secondary_cta_label: 'Become an Organizer',
+  cms_home_secondary_cta_url: '/register',
+  cms_footer_tagline: 'Adventure Ticketing for East Africa',
+};
+
 const parseBool = (v, fallback = true) => {
   if (v === undefined || v === null || v === '') return fallback;
   return String(v).toLowerCase() === 'true';
@@ -73,7 +85,7 @@ export default function AdminSettings() {
     <div style={{ maxWidth: 840, display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ fontFamily: 'Syne', fontWeight: 600, marginBottom: 2, fontSize: 16 }}>Platform Settings</div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div className="responsive-grid-2">
         <div className="form-group">
           <label className="form-label">Platform Name</label>
           <input className="input" value={settings.platform_name || ''} onChange={(e) => setField('platform_name', e.target.value)} />
@@ -94,7 +106,7 @@ export default function AdminSettings() {
 
       <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
         <div style={{ fontFamily: 'Syne', fontWeight: 600, fontSize: 15, marginBottom: 10 }}>Security Controls</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="responsive-grid-2">
           <div className="form-group">
             <label className="form-label">Require Email Verification</label>
             <select
@@ -147,7 +159,7 @@ export default function AdminSettings() {
 
       <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
         <div style={{ fontFamily: 'Syne', fontWeight: 600, fontSize: 15, marginBottom: 10 }}>Customer Trust</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="responsive-grid-2">
           <div className="form-group">
             <label className="form-label">Show Buyer Protection Banner</label>
             <select
@@ -184,6 +196,75 @@ export default function AdminSettings() {
       </div>
 
       <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 10 }}>
+          <div>
+            <div style={{ fontFamily: 'Syne', fontWeight: 600, fontSize: 15 }}>Homepage CMS</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>
+              Manage public homepage copy and call-to-action links without editing code.
+            </div>
+          </div>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => setSettings((current) => ({ ...current, ...SAMPLE_HOMEPAGE_CMS }))}
+          >
+            Load Homepage Defaults
+          </button>
+        </div>
+
+        <div className="responsive-grid-2">
+          <div className="form-group">
+            <label className="form-label">Hero Eyebrow</label>
+            <input className="input" value={settings.cms_home_eyebrow || ''} onChange={(e) => setField('cms_home_eyebrow', e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Footer Tagline</label>
+            <input className="input" value={settings.cms_footer_tagline || ''} onChange={(e) => setField('cms_footer_tagline', e.target.value)} />
+          </div>
+        </div>
+
+        <div className="responsive-grid-2" style={{ marginTop: 10 }}>
+          <div className="form-group">
+            <label className="form-label">Hero Title</label>
+            <input className="input" value={settings.cms_home_title || ''} onChange={(e) => setField('cms_home_title', e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Hero Highlight</label>
+            <input className="input" value={settings.cms_home_title_highlight || ''} onChange={(e) => setField('cms_home_title_highlight', e.target.value)} />
+          </div>
+        </div>
+
+        <div className="form-group" style={{ marginTop: 10 }}>
+          <label className="form-label">Hero Subtitle</label>
+          <textarea
+            className="textarea"
+            value={settings.cms_home_subtitle || ''}
+            onChange={(e) => setField('cms_home_subtitle', e.target.value)}
+            style={{ minHeight: 100 }}
+            placeholder="Supporting copy shown under the homepage headline."
+          />
+        </div>
+
+        <div className="responsive-grid-2" style={{ marginTop: 10 }}>
+          <div className="form-group">
+            <label className="form-label">Primary CTA Label</label>
+            <input className="input" value={settings.cms_home_primary_cta_label || ''} onChange={(e) => setField('cms_home_primary_cta_label', e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Primary CTA URL</label>
+            <input className="input" value={settings.cms_home_primary_cta_url || ''} onChange={(e) => setField('cms_home_primary_cta_url', e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Secondary CTA Label</label>
+            <input className="input" value={settings.cms_home_secondary_cta_label || ''} onChange={(e) => setField('cms_home_secondary_cta_label', e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Secondary CTA URL</label>
+            <input className="input" value={settings.cms_home_secondary_cta_url || ''} onChange={(e) => setField('cms_home_secondary_cta_url', e.target.value)} />
+          </div>
+        </div>
+      </div>
+
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 8 }}>
           <div style={{ fontFamily: 'Syne', fontWeight: 600, fontSize: 15 }}>Organizer Terms & Conditions</div>
           <button className="btn btn-secondary btn-sm" onClick={() => setField('terms_and_conditions', SAMPLE_TERMS)}>
@@ -204,7 +285,7 @@ export default function AdminSettings() {
         </div>
       </div>
 
-      <button className="btn btn-primary" style={{ width: 'fit-content' }} onClick={save} disabled={saving}>
+      <button className="btn btn-primary" style={{ width: 'fit-content', maxWidth: '100%' }} onClick={save} disabled={saving}>
         <i data-lucide="save" style={{ width: 14, height: 14 }} />
         {saving ? 'Saving…' : 'Save Settings'}
       </button>

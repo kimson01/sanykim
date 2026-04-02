@@ -220,7 +220,7 @@ export default function CustomerCarePage() {
         <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
           <SanyLogo size={32} full />
         </Link>
-        <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700 }}>Customer Care</div>
+        <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, textAlign: 'center' }}>Customer Care</div>
         <Link to="/" className="btn btn-secondary btn-sm">
           <i data-lucide="arrow-left" style={{ width: 13, height: 13 }} /> Back to events
         </Link>
