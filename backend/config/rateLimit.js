@@ -1,3 +1,4 @@
+const rateLimit = require('express-rate-limit');
 const { getRedisClient, isRedisConfigured } = require('./redis');
 
 let RedisStore = null;
@@ -31,4 +32,39 @@ function createSharedRateLimitStore() {
   });
 }
 
-module.exports = { createSharedRateLimitStore };
+const isLocalRequest = (req) => {
+  const ip = String(req.ip || req.socket?.remoteAddress || '');
+  return (
+    ip === '127.0.0.1' ||
+    ip === '::1' ||
+    ip === '::ffff:127.0.0.1' ||
+    ip.endsWith('localhost')
+  );
+};
+
+const shouldSkipRateLimit = (req) =>
+  process.env.NODE_ENV !== 'production' && isLocalRequest(req);
+
+function buildRateLimiter({ windowMs, max, message, keyGenerator, skip, ...rest }) {
+  const options = {
+    windowMs,
+    max,
+    skip: skip || shouldSkipRateLimit,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message,
+    ...rest,
+  };
+
+  if (keyGenerator) options.keyGenerator = keyGenerator;
+
+  const store = createSharedRateLimitStore();
+  if (store) options.store = store;
+
+  return rateLimit(options);
+}
+
+module.exports = {
+  createSharedRateLimitStore,
+  buildRateLimiter,
+};

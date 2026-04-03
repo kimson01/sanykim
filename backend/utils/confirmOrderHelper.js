@@ -6,21 +6,15 @@ const { v4: uuidv4 }        = require('uuid');
 const QRCode                 = require('qrcode');
 const { sendTicketEmail }    = require('./mailer');
 const { logPlatformEvent }   = require('./platformLogger');
+const { parseJsonObject }    = require('./jsonField');
+const { createOrderConfirmedNotification } = require('./notificationService');
 
 const generateTicketCode = () => {
   const seg = () => Math.random().toString(36).slice(2, 6).toUpperCase();
   return `EF-${seg()}-${seg()}`;
 };
 
-const parseNotes = (value) => {
-  if (!value) return {};
-  if (typeof value === 'object') return value;
-  try {
-    return JSON.parse(value);
-  } catch (_) {
-    return {};
-  }
-};
+const parseNotes = (value) => parseJsonObject(value, {});
 
 const PG_UNIQUE_VIOLATION = '23505';
 
@@ -181,23 +175,29 @@ async function confirmOrderInDB(client, orderId, txnRef, method = 'mpesa', provi
 
   // 8. Organizer revenue + ledger entry
   const orgRes = await client.query(
-    `SELECT id, available_balance FROM organizers
+    `SELECT id, available_balance, refund_liability FROM organizers
      WHERE id = (SELECT organizer_id FROM events WHERE id = $1)`,
     [order.event_id]
   );
   if (orgRes.rows[0]) {
-    const org          = orgRes.rows[0];
-    const netToOrg     = Number(order.total) - Number(order.commission_amt);
-    const newBalance   = Number(org.available_balance) + netToOrg;
+    const org = orgRes.rows[0];
+    const netToOrg = Number(order.total) - Number(order.commission_amt);
+    const currentBalance = Number(org.available_balance || 0);
+    const currentLiability = Number(org.refund_liability || 0);
+    const liabilityApplied = Math.min(currentLiability, netToOrg);
+    const creditedBalance = netToOrg - liabilityApplied;
+    const newBalance = currentBalance + creditedBalance;
+    const newLiability = currentLiability - liabilityApplied;
 
     // Update organizer totals
     await client.query(
       `UPDATE organizers
        SET total_revenue     = total_revenue     + $1,
-           available_balance = available_balance + $2,
+           available_balance = $2,
+           refund_liability  = $3,
            updated_at        = NOW()
-       WHERE id = $3`,
-      [order.total, netToOrg, org.id]
+       WHERE id = $4`,
+      [order.total, newBalance, newLiability, org.id]
     );
 
     // Write ledger entry — sale
@@ -212,7 +212,9 @@ async function confirmOrderInDB(client, orderId, txnRef, method = 'mpesa', provi
         order.commission_amt,
         netToOrg,
         newBalance,
-        `Ticket sale — Order ${order.order_ref}`,
+        liabilityApplied > 0
+          ? `Ticket sale — Order ${order.order_ref} (${liabilityApplied.toFixed(2)} applied to refund liability)`
+          : `Ticket sale — Order ${order.order_ref}`,
       ]
     );
   }
@@ -260,6 +262,14 @@ async function confirmOrderInDB(client, orderId, txnRef, method = 'mpesa', provi
       transaction_method: method,
     },
   }, client).catch(() => {});
+
+  await createOrderConfirmedNotification(client, {
+    userId: order.user_id,
+    orderId,
+    orderRef: order.order_ref,
+    eventTitle: order.event_title,
+    ticketCount: generatedTickets.length,
+  }).catch(() => {});
 
   return { order_ref: order.order_ref, tickets: generatedTickets };
 }

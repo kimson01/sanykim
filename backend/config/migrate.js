@@ -60,6 +60,7 @@ const statements = [
     commission    NUMERIC(5,2) NOT NULL DEFAULT 10.00,
     total_revenue      NUMERIC(14,2) NOT NULL DEFAULT 0.00,
     available_balance  NUMERIC(14,2) NOT NULL DEFAULT 0.00,
+    refund_liability   NUMERIC(14,2) NOT NULL DEFAULT 0.00,
     total_paid_out     NUMERIC(14,2) NOT NULL DEFAULT 0.00,
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
@@ -153,6 +154,25 @@ const statements = [
     provider_data JSONB,
     created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+  )`,
+
+  // ── PAYMENT PROVIDER EVENTS ────────────────────────────────────────
+  // Stores raw callback events for dedupe, audit, and replay safety.
+  `CREATE TABLE IF NOT EXISTS payment_provider_events (
+    id                  UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    provider            VARCHAR(30)  NOT NULL,
+    event_type          VARCHAR(50)  NOT NULL,
+    event_key           VARCHAR(120) NOT NULL,
+    checkout_request_id VARCHAR(120),
+    txn_ref             VARCHAR(60),
+    order_id            UUID         REFERENCES orders(id) ON DELETE SET NULL,
+    result_code         INTEGER,
+    status              VARCHAR(20)  NOT NULL DEFAULT 'received',
+    payload             JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    processed_at        TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (provider, event_type, event_key)
   )`,
 
   // ── TICKETS ────────────────────────────────────────────────────────
@@ -330,6 +350,36 @@ const statements = [
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
   )`,
 
+  `CREATE TABLE IF NOT EXISTS reconciliation_issues (
+    id            UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    issue_key     VARCHAR(180) NOT NULL UNIQUE,
+    issue_type    VARCHAR(80)  NOT NULL,
+    entity_type   VARCHAR(40)  NOT NULL,
+    entity_id     UUID,
+    severity      VARCHAR(20)  NOT NULL DEFAULT 'warning',
+    summary       VARCHAR(255) NOT NULL,
+    details       JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    status        VARCHAR(20)  NOT NULL DEFAULT 'open',
+    first_seen_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    last_seen_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    resolved_at   TIMESTAMPTZ
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS notifications (
+    id            UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id       UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type          VARCHAR(60)  NOT NULL,
+    title         VARCHAR(180) NOT NULL,
+    message       TEXT         NOT NULL,
+    link_url      VARCHAR(255),
+    dedupe_key    VARCHAR(180),
+    is_read       BOOLEAN      NOT NULL DEFAULT FALSE,
+    read_at       TIMESTAMPTZ,
+    data          JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  )`,
+
   // ── PLATFORM SETTINGS ──────────────────────────────────────────────
   // ── WAITLIST ───────────────────────────────────────────────────────
   // Captures demand for sold-out events.
@@ -371,6 +421,7 @@ const statements = [
 
   // ── ALTER TABLE — add new columns to existing databases ────────────
   `ALTER TABLE organizers ADD COLUMN IF NOT EXISTS available_balance NUMERIC(14,2) NOT NULL DEFAULT 0.00`,
+  `ALTER TABLE organizers ADD COLUMN IF NOT EXISTS refund_liability  NUMERIC(14,2) NOT NULL DEFAULT 0.00`,
   `ALTER TABLE organizers ADD COLUMN IF NOT EXISTS total_paid_out    NUMERIC(14,2) NOT NULL DEFAULT 0.00`,
   // Organizer onboarding fields (safe to run on existing databases)
   `ALTER TABLE organizers ADD COLUMN IF NOT EXISTS business_type         VARCHAR(30)  DEFAULT 'individual'`,
@@ -393,6 +444,13 @@ const statements = [
   `ALTER TABLE users      ADD COLUMN IF NOT EXISTS email_verify_expires TIMESTAMPTZ`,
   `ALTER TABLE users      ADD COLUMN IF NOT EXISTS reset_token          VARCHAR(64)`,
   `ALTER TABLE users      ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ`,
+  `ALTER TABLE orders     ADD COLUMN IF NOT EXISTS expires_at          TIMESTAMPTZ`,
+  `ALTER TABLE notifications ADD COLUMN IF NOT EXISTS link_url         VARCHAR(255)`,
+  `ALTER TABLE notifications ADD COLUMN IF NOT EXISTS dedupe_key       VARCHAR(180)`,
+  `ALTER TABLE notifications ADD COLUMN IF NOT EXISTS is_read          BOOLEAN NOT NULL DEFAULT FALSE`,
+  `ALTER TABLE notifications ADD COLUMN IF NOT EXISTS read_at          TIMESTAMPTZ`,
+  `ALTER TABLE notifications ADD COLUMN IF NOT EXISTS data             JSONB NOT NULL DEFAULT '{}'::jsonb`,
+  `ALTER TABLE notifications ADD COLUMN IF NOT EXISTS updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
   `ALTER TABLE attendees  ADD COLUMN IF NOT EXISTS reminder_sent       BOOLEAN NOT NULL DEFAULT FALSE`,
   `ALTER TABLE tickets    ADD COLUMN IF NOT EXISTS is_voided           BOOLEAN NOT NULL DEFAULT FALSE`,
   `ALTER TABLE tickets    ADD COLUMN IF NOT EXISTS voided_at           TIMESTAMPTZ`,
@@ -423,6 +481,9 @@ const statements = [
    ON orders(status, created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_orders_event_status_created
    ON orders(event_id, status, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_orders_expires_at
+   ON orders(status, expires_at)
+   WHERE status = 'pending'`,
   `CREATE INDEX IF NOT EXISTS idx_tickets_event    ON tickets(event_id)`,
   `CREATE INDEX IF NOT EXISTS idx_tickets_user     ON tickets(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_tickets_code     ON tickets(ticket_code)`,
@@ -437,6 +498,18 @@ const statements = [
    ON order_items(order_id)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_order
    ON transactions(order_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_orders_checkout_request_id
+   ON orders((notes::jsonb ->> 'checkout_request_id'))
+   WHERE notes IS NOT NULL
+     AND (notes::jsonb ->> 'checkout_request_id') IS NOT NULL`,
+  `CREATE INDEX IF NOT EXISTS idx_payment_provider_events_created
+   ON payment_provider_events(created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_payment_provider_events_order
+   ON payment_provider_events(order_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_payment_provider_events_checkout
+   ON payment_provider_events(provider, checkout_request_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_payment_provider_events_txn_ref
+   ON payment_provider_events(txn_ref)`,
   `CREATE INDEX IF NOT EXISTS idx_events_org_status_date
    ON events(organizer_id, status, event_date DESC)`,
 
@@ -501,6 +574,17 @@ const statements = [
    ON platform_activity_logs(actor_user_id, created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_platform_logs_entity
    ON platform_activity_logs(entity_type, entity_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_reconciliation_issues_status
+   ON reconciliation_issues(status, severity, last_seen_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_reconciliation_issues_entity
+   ON reconciliation_issues(entity_type, entity_id, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_notifications_user_created
+   ON notifications(user_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+   ON notifications(user_id, is_read, created_at DESC)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_notifications_user_dedupe
+   ON notifications(user_id, dedupe_key)
+   WHERE dedupe_key IS NOT NULL`,
 
   // ── DEFAULT PLATFORM SETTINGS ──────────────────────────────────────
   `INSERT INTO platform_settings (key, value) VALUES

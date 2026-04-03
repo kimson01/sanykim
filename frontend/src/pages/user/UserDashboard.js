@@ -61,9 +61,9 @@ export default function UserDashboard() {
     </div>
   );
 
-  const now      = new Date();
-  const upcoming = tickets.filter(t => new Date(t.event_date) >= now && !t.is_scanned);
-  const past     = tickets.filter(t => new Date(t.event_date) <  now ||  t.is_scanned);
+  const now = new Date();
+  const upcoming = tickets.filter((t) => new Date(t.event_date) >= now && !t.is_scanned && !t.is_voided);
+  const past = tickets.filter((t) => new Date(t.event_date) < now || t.is_scanned || t.is_voided);
   const shown    = tab === 'upcoming' ? upcoming : past;
   const totalSpent = orders.filter(o => o.status === 'success')
                            .reduce((s, o) => s + Number(o.total), 0);
@@ -132,7 +132,11 @@ export default function UserDashboard() {
         ) : (
           <div className="account-list">
             {shown.slice(0, 6).map(t => (
-              <div key={t.id} className="account-list-row" style={{ opacity: t.is_scanned ? 0.65 : 1 }}>
+              <div
+                key={t.id}
+                className="account-list-row"
+                style={{ opacity: (t.is_scanned || t.is_voided) ? 0.65 : 1 }}
+              >
                 {/* Thumbnail */}
                 {t.banner_url
                   ? <img src={t.banner_url} alt="" style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
@@ -152,8 +156,10 @@ export default function UserDashboard() {
 
                 {/* Right side */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
-                  <CountdownBadge dateStr={t.event_date} />
-                  {t.is_scanned
+                  {!t.is_voided && <CountdownBadge dateStr={t.event_date} />}
+                  {t.is_voided
+                    ? <span style={{ fontSize: 11, color: 'var(--danger)' }}>Refunded</span>
+                    : t.is_scanned
                     ? <span style={{ fontSize: 11, color: 'var(--text3)' }}>Used</span>
                     : <Link to="/dashboard/tickets" className="btn btn-secondary btn-sm" style={{ fontSize: 11 }}>
                         <i data-lucide="ticket" style={{ width: 11, height: 11 }} /> View

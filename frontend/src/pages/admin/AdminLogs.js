@@ -1,18 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { adminAPI } from '../../api/client';
 import { Badge, Modal, fmtDate, useToast } from '../../components/ui';
-
-const initialFilters = {
-  q: '',
-  source: '',
-  action_type: '',
-  domain: '',
-  severity: '',
-  date_from: '',
-  date_to: '',
-  page: 1,
-  limit: 25,
-};
 
 const sourceVariant = {
   admin: 'red',
@@ -74,6 +63,18 @@ function buildPreview(row) {
 }
 
 export default function AdminLogs() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialFilters = {
+    q: searchParams.get('q') || '',
+    source: searchParams.get('source') || '',
+    action_type: searchParams.get('action_type') || '',
+    domain: searchParams.get('domain') || '',
+    severity: searchParams.get('severity') || '',
+    date_from: searchParams.get('date_from') || '',
+    date_to: searchParams.get('date_to') || '',
+    page: parseInt(searchParams.get('page') || '1', 10) || 1,
+    limit: parseInt(searchParams.get('limit') || '25', 10) || 25,
+  };
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState(emptyMeta);
   const [loading, setLoading] = useState(true);
@@ -119,6 +120,15 @@ export default function AdminLogs() {
     };
   }, [filters]);
 
+  useEffect(() => {
+    const next = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value === '' || value === null || value === undefined) return;
+      next.set(key, String(value));
+    });
+    setSearchParams(next, { replace: true });
+  }, [filters, setSearchParams]);
+
   const actionOptions = meta.filter_options?.action_types || [];
   const domainOptions = meta.filter_options?.domains || [];
   const severityOptions = meta.filter_options?.severities || [];
@@ -129,9 +139,9 @@ export default function AdminLogs() {
 
   if (loading) {
     return (
-      <div className="card" style={{ padding: 32, minHeight: 220, display: 'grid', placeItems: 'center' }}>
-        <div style={{ textAlign: 'center', color: 'var(--text2)' }}>
-          <div className="spinner" style={{ margin: '0 auto 12px' }} />
+      <div className="card admin-loading-card">
+        <div className="admin-loading-copy">
+          <div className="spinner admin-loading-spinner" />
           Loading admin logs...
         </div>
       </div>
@@ -142,29 +152,21 @@ export default function AdminLogs() {
     <>
       <div className="card">
         {error && (
-          <div style={{
-            marginBottom: 16,
-            background: 'var(--danger-dim)',
-            border: '1px solid rgba(239,68,68,0.2)',
-            borderRadius: 10,
-            padding: '12px 14px',
-            color: 'var(--danger)',
-            fontSize: 13,
-          }}>
+          <div className="admin-alert admin-alert-danger">
             {error}
           </div>
         )}
 
         <div className="responsive-header" style={{ marginBottom: 16 }}>
           <div>
-            <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 600 }}>
+            <div className="admin-section-title" style={{ marginBottom: 0 }}>
               Admin Logs ({meta.total || rows.length})
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4 }}>
+            <div className="admin-text-subtle" style={{ marginTop: 4 }}>
               Unified stream of admin actions and admin-side support interventions.
             </div>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text2)' }}>
+          <div className="admin-text-subtle">
             Page {filters.page} of {totalPages}
           </div>
         </div>
@@ -176,14 +178,12 @@ export default function AdminLogs() {
             { label: 'Support actions', value: meta.sources?.support || 0, sub: 'Admin conflict interventions', color: 'var(--info)' },
             { label: 'Platform events', value: meta.sources?.platform || 0, sub: 'Auth, payments, orders, tickets', color: 'var(--accent)' },
           ].map((item) => (
-            <div key={item.label} style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px' }}>
-              <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-                {item.label}
-              </div>
-              <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 24, fontWeight: 800, color: item.color }}>
+            <div key={item.label} className="admin-kpi-card admin-kpi-card-soft">
+              <div className="admin-stat-label">{item.label}</div>
+              <div className="admin-stat-value admin-stat-value-lg" style={{ color: item.color }}>
                 {Number(item.value || 0).toLocaleString()}
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4 }}>{item.sub}</div>
+              <div className="admin-text-subtle" style={{ marginTop: 4 }}>{item.sub}</div>
             </div>
           ))}
         </div>
@@ -234,10 +234,10 @@ export default function AdminLogs() {
         </div>
 
         <div className="responsive-header" style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)' }}>
+          <div className="admin-text-subtle">
             Showing {rows.length} of {meta.total || rows.length} entries
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="admin-toolbar-actions">
             <button className="btn btn-secondary btn-sm" onClick={() => setFilters(initialFilters)}>
               Reset
             </button>
@@ -284,7 +284,7 @@ export default function AdminLogs() {
             <tbody>
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text3)', padding: 32 }}>
+                  <td colSpan={7} className="admin-empty-cell">
                     No log entries match the current filters
                   </td>
                 </tr>
@@ -294,9 +294,9 @@ export default function AdminLogs() {
 
                 return (
                   <tr key={`${row.log_source}-${row.id}`}>
-                    <td style={{ whiteSpace: 'nowrap', fontSize: 12, color: 'var(--text2)' }}>
+                    <td className="admin-table-cell-subtle" style={{ whiteSpace: 'nowrap' }}>
                       {fmtDate(row.created_at)}
-                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+                      <div className="admin-stat-sub">
                         {new Date(row.created_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </td>
@@ -305,25 +305,25 @@ export default function AdminLogs() {
                         {sourceLabel[row.log_source] || row.log_source}
                       </Badge>
                     </td>
-                    <td style={{ fontSize: 12 }}>
-                      <div style={{ fontWeight: 600 }}>{row.actor_name || row.actor_role || 'System'}</div>
-                      <div style={{ color: 'var(--text3)' }}>{row.actor_email || '—'}</div>
+                    <td className="admin-table-cell-tight">
+                      <div className="admin-detail-value-strong">{row.actor_name || row.actor_role || 'System'}</div>
+                      <div className="admin-stat-sub">{row.actor_email || '—'}</div>
                     </td>
-                    <td style={{ fontSize: 12 }}>
-                      <div style={{ fontFamily: 'monospace', fontSize: 11 }}>{row.action_type}</div>
-                      <div style={{ color: 'var(--text3)', marginTop: 4 }}>{formatActionLabel(row.action_type)}</div>
+                    <td className="admin-table-cell-tight">
+                      <div className="admin-mono-sm">{row.action_type}</div>
+                      <div className="admin-stat-sub">{formatActionLabel(row.action_type)}</div>
                     </td>
-                    <td style={{ fontSize: 12 }}>
+                    <td className="admin-table-cell-tight">
                       <div>{row.entity_type}</div>
-                      <div style={{ color: 'var(--text3)', fontFamily: 'monospace', fontSize: 10 }}>
+                      <div className="admin-stat-sub" style={{ fontFamily: 'monospace', fontSize: 10 }}>
                         {row.entity_id || '—'}
                       </div>
                     </td>
-                    <td style={{ fontSize: 12, color: 'var(--text2)', minWidth: 240 }}>
+                    <td className="admin-table-cell-subtle" style={{ minWidth: 240 }}>
                       {row.summary}
                     </td>
-                    <td style={{ fontSize: 12, minWidth: 180 }}>
-                      <div style={{ color: 'var(--text2)', marginBottom: 8 }}>
+                    <td className="admin-table-cell-tight" style={{ minWidth: 180 }}>
+                      <div className="admin-text-subtle" style={{ marginBottom: 8 }}>
                         {preview || 'No extra details'}
                       </div>
                       <button className="btn btn-secondary btn-sm" onClick={() => setSelectedRow(row)}>
@@ -345,58 +345,49 @@ export default function AdminLogs() {
         size="lg"
       >
         {selectedRow && (
-          <div style={{ display: 'grid', gap: 16 }}>
+          <div className="admin-detail-stack">
             <div className="responsive-grid-4" style={{ gap: 12 }}>
-              <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
-                <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Source</div>
-                <div style={{ marginTop: 6 }}><Badge variant={sourceVariant[selectedRow.log_source] || 'gray'}>{sourceLabel[selectedRow.log_source] || selectedRow.log_source}</Badge></div>
+              <div className="admin-detail-card">
+                <div className="admin-detail-label">Source</div>
+                <div className="admin-detail-value"><Badge variant={sourceVariant[selectedRow.log_source] || 'gray'}>{sourceLabel[selectedRow.log_source] || selectedRow.log_source}</Badge></div>
               </div>
-              <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
-                <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Actor</div>
-                <div style={{ marginTop: 6, fontWeight: 600 }}>{selectedRow.actor_name || selectedRow.actor_role || 'System'}</div>
-                <div style={{ fontSize: 12, color: 'var(--text2)' }}>{selectedRow.actor_email || '—'}</div>
+              <div className="admin-detail-card">
+                <div className="admin-detail-label">Actor</div>
+                <div className="admin-detail-value admin-detail-value-strong">{selectedRow.actor_name || selectedRow.actor_role || 'System'}</div>
+                <div className="admin-text-subtle">{selectedRow.actor_email || '—'}</div>
               </div>
-              <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
-                <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>When</div>
-                <div style={{ marginTop: 6, fontWeight: 600 }}>{new Date(selectedRow.created_at).toLocaleString('en-KE')}</div>
+              <div className="admin-detail-card">
+                <div className="admin-detail-label">When</div>
+                <div className="admin-detail-value admin-detail-value-strong">{new Date(selectedRow.created_at).toLocaleString('en-KE')}</div>
               </div>
               {selectedRow.payload?.domain && (
-                <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
-                  <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Domain</div>
-                  <div style={{ marginTop: 6, fontWeight: 600 }}>{selectedRow.payload.domain}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text2)' }}>Severity: {selectedRow.payload.severity || 'info'}</div>
+                <div className="admin-detail-card">
+                  <div className="admin-detail-label">Domain</div>
+                  <div className="admin-detail-value admin-detail-value-strong">{selectedRow.payload.domain}</div>
+                  <div className="admin-text-subtle">Severity: {selectedRow.payload.severity || 'info'}</div>
                 </div>
               )}
             </div>
 
-            <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: 14 }}>
-              <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Summary</div>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{selectedRow.summary}</div>
-              <div className="responsive-grid-2" style={{ gap: 12, fontSize: 12 }}>
+            <div className="admin-detail-card" style={{ padding: 14 }}>
+              <div className="admin-detail-label" style={{ marginBottom: 8 }}>Summary</div>
+              <div className="admin-modal-summary-title" style={{ marginBottom: 12 }}>{selectedRow.summary}</div>
+              <div className="responsive-grid-2" style={{ gap: 12 }}>
                 <div>
-                  <div style={{ color: 'var(--text3)' }}>Action</div>
-                  <div style={{ fontFamily: 'monospace', marginTop: 4 }}>{selectedRow.action_type}</div>
+                  <div className="admin-text-subtle">Action</div>
+                  <div className="admin-mono-sm" style={{ marginTop: 4 }}>{selectedRow.action_type}</div>
                 </div>
                 <div>
-                  <div style={{ color: 'var(--text3)' }}>Entity</div>
+                  <div className="admin-text-subtle">Entity</div>
                   <div style={{ marginTop: 4 }}>{selectedRow.entity_type}</div>
-                  <div style={{ fontFamily: 'monospace', color: 'var(--text2)', marginTop: 4 }}>{selectedRow.entity_id || '—'}</div>
+                  <div className="admin-mono-sm admin-text-subtle" style={{ marginTop: 4 }}>{selectedRow.entity_id || '—'}</div>
                 </div>
               </div>
             </div>
 
             <div>
-              <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Payload</div>
-              <pre style={{
-                margin: 0,
-                padding: 14,
-                background: '#0f172a',
-                color: '#e2e8f0',
-                borderRadius: 10,
-                overflowX: 'auto',
-                fontSize: 12,
-                lineHeight: 1.6,
-              }}>
+              <div className="admin-detail-label" style={{ marginBottom: 8 }}>Payload</div>
+              <pre className="admin-payload-block">
                 {JSON.stringify(selectedRow.payload || {}, null, 2)}
               </pre>
             </div>

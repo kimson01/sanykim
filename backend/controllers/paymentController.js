@@ -1,27 +1,22 @@
 // controllers/paymentController.js — M-PESA Daraja STK Push
-const { queryOne, pool } = require('../config/db');
+const { query, queryOne, pool } = require('../config/db');
 const { confirmOrderInDB } = require('../utils/confirmOrderHelper');
 const { logPlatformEvent, getRequestMeta } = require('../utils/platformLogger');
+const { parseJsonObject } = require('../utils/jsonField');
 
 const MPESA_BASE = process.env.MPESA_ENV === 'production'
   ? 'https://api.safaricom.co.ke'
   : 'https://sandbox.safaricom.co.ke';
 const MPESA_CALLBACK_TOKEN = (process.env.MPESA_CALLBACK_TOKEN || '').trim();
 
-const parseNotes = (value) => {
-  if (!value) return {};
-  if (typeof value === 'object') return value;
-  try {
-    return JSON.parse(value);
-  } catch (_) {
-    return {};
-  }
-};
+const parseNotes = (value) => parseJsonObject(value, {});
 
 const asMoney = (value) => {
   const amount = Number(value);
   return Number.isFinite(amount) ? amount : null;
 };
+
+const PG_UNIQUE_VIOLATION = '23505';
 
 function isAuthorizedMpesaCallback(req) {
   if (!MPESA_CALLBACK_TOKEN) {
@@ -52,7 +47,7 @@ const stkPush = async (req, res) => {
 
   try {
     const order = await queryOne(
-      `SELECT id, order_ref, total, status, user_id, attendee_email, notes
+      `SELECT id, order_ref, total, status, user_id, attendee_email, notes, expires_at
        FROM orders
        WHERE id = $1`,
       [order_id]
@@ -60,6 +55,16 @@ const stkPush = async (req, res) => {
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
     if (order.user_id !== req.user.id && order.attendee_email !== req.user.email) {
       return res.status(403).json({ success: false, message: 'Not authorized for this order' });
+    }
+    if (order.status === 'pending' && order.expires_at && new Date(order.expires_at) < new Date()) {
+      await queryOne(
+        `UPDATE orders
+         SET status = 'expired', updated_at = NOW()
+         WHERE id = $1
+           AND status = 'pending'`,
+        [order.id]
+      ).catch(() => {});
+      return res.status(410).json({ success: false, message: 'This pending order has expired. Please create a new order.' });
     }
     if (order.status !== 'pending') {
       return res.status(409).json({ success: false, message: 'Only pending orders can be paid' });
@@ -206,6 +211,43 @@ const mpesaCallback = async (req, res) => {
   if (!callback) return;
 
   const { ResultCode, ResultDesc, CallbackMetadata, CheckoutRequestID } = callback;
+  if (!CheckoutRequestID) return;
+
+  let callbackEventId = null;
+  try {
+    const inserted = await queryOne(
+      `INSERT INTO payment_provider_events
+         (provider, event_type, event_key, checkout_request_id, result_code, payload)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (provider, event_type, event_key) DO NOTHING
+       RETURNING id`,
+      [
+        'mpesa',
+        'stk_callback',
+        CheckoutRequestID,
+        CheckoutRequestID,
+        Number.isFinite(Number(ResultCode)) ? Number(ResultCode) : null,
+        JSON.stringify(req.body || {}),
+      ]
+    );
+    if (!inserted?.id) {
+      await logPlatformEvent({
+        actorRole: 'system',
+        domain: 'payment',
+        eventType: 'mpesa_callback_duplicate',
+        entityType: 'payment',
+        summary: `Duplicate M-PESA callback ignored for ${CheckoutRequestID}`,
+        payload: { checkout_request_id: CheckoutRequestID, result_code: ResultCode },
+        ...getRequestMeta(req),
+      }).catch(() => {});
+      return;
+    }
+    callbackEventId = inserted.id;
+  } catch (err) {
+    if (err.code === PG_UNIQUE_VIOLATION) return;
+    console.error('mpesaCallback event insert:', err.message);
+    return;
+  }
 
   if (ResultCode !== 0) {
     console.warn(`M-PESA payment failed (${CheckoutRequestID}): ${ResultDesc}`);
@@ -221,6 +263,14 @@ const mpesaCallback = async (req, res) => {
     } catch (e) {
       console.error('mpesaCallback mark-failed:', e.message);
     }
+    await query(
+      `UPDATE payment_provider_events
+       SET status = 'failed',
+           processed_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $1`,
+      [callbackEventId]
+    ).catch(() => {});
     await logPlatformEvent({
       actorRole: 'system',
       domain: 'payment',
@@ -244,7 +294,7 @@ const mpesaCallback = async (req, res) => {
   let order;
   try {
     order = await queryOne(
-      `SELECT id, order_ref, total FROM orders
+      `SELECT id, order_ref, total, expires_at FROM orders
        WHERE notes::jsonb ->> 'checkout_request_id' = $1
          AND status = 'pending'`,
       [CheckoutRequestID]
@@ -256,6 +306,15 @@ const mpesaCallback = async (req, res) => {
 
   if (!order) {
     console.warn(`mpesaCallback: no pending order for CheckoutRequestID ${CheckoutRequestID}`);
+    await query(
+      `UPDATE payment_provider_events
+       SET status = 'unmatched',
+           txn_ref = $2,
+           processed_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $1`,
+      [callbackEventId, txnRef || null]
+    ).catch(() => {});
     await logPlatformEvent({
       actorRole: 'system',
       domain: 'payment',
@@ -264,6 +323,38 @@ const mpesaCallback = async (req, res) => {
       summary: `No pending order matched M-PESA callback ${CheckoutRequestID}`,
       severity: 'warning',
       payload: { checkout_request_id: CheckoutRequestID, txn_ref: txnRef, amount, phone },
+    }).catch(() => {});
+    return;
+  }
+
+  if (order.expires_at && new Date(order.expires_at) < new Date()) {
+    await queryOne(
+      `UPDATE orders
+       SET status = 'expired', updated_at = NOW()
+       WHERE id = $1
+         AND status = 'pending'`,
+      [order.id]
+    ).catch(() => {});
+    await query(
+      `UPDATE payment_provider_events
+       SET order_id = $2,
+           txn_ref = $3,
+           status = 'expired',
+           processed_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $1`,
+      [callbackEventId, order.id, txnRef || null]
+    ).catch(() => {});
+    await logPlatformEvent({
+      actorRole: 'system',
+      domain: 'payment',
+      eventType: 'mpesa_callback_expired_order',
+      entityType: 'order',
+      entityId: order.id,
+      summary: `Ignored M-PESA callback for expired order ${order.order_ref}`,
+      severity: 'warning',
+      payload: { checkout_request_id: CheckoutRequestID, txn_ref: txnRef, amount, phone },
+      ...getRequestMeta(req),
     }).catch(() => {});
     return;
   }
@@ -282,6 +373,16 @@ const mpesaCallback = async (req, res) => {
     } catch (e) {
       console.error('mpesaCallback amount-mismatch mark-failed:', e.message);
     }
+    await query(
+      `UPDATE payment_provider_events
+       SET order_id = $2,
+           txn_ref = $3,
+           status = 'rejected',
+           processed_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $1`,
+      [callbackEventId, order.id, txnRef || null]
+    ).catch(() => {});
     await logPlatformEvent({
       actorRole: 'system',
       domain: 'payment',
@@ -310,6 +411,16 @@ const mpesaCallback = async (req, res) => {
       client, order.id, txnRef, 'mpesa', { CheckoutRequestID, amount, phone }
     );
     await client.query('COMMIT');
+    await query(
+      `UPDATE payment_provider_events
+       SET order_id = $2,
+           txn_ref = $3,
+           status = 'processed',
+           processed_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $1`,
+      [callbackEventId, order.id, txnRef || null]
+    ).catch(() => {});
     await logPlatformEvent({
       actorRole: 'system',
       domain: 'payment',
@@ -339,6 +450,16 @@ const mpesaCallback = async (req, res) => {
     } catch (markErr) {
       console.error('mpesaCallback confirmOrder mark-failed:', markErr.message);
     }
+    await query(
+      `UPDATE payment_provider_events
+       SET order_id = $2,
+           txn_ref = $3,
+           status = 'failed',
+           processed_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $1`,
+      [callbackEventId, order.id, txnRef || null]
+    ).catch(() => {});
     await logPlatformEvent({
       actorRole: 'system',
       domain: 'payment',
@@ -368,7 +489,7 @@ const simulatePayment = async (req, res) => {
   }
 
   const order = await queryOne(
-    `SELECT id, status, user_id, attendee_email
+    `SELECT id, status, user_id, attendee_email, expires_at
      FROM orders
      WHERE id = $1`, [order_id]
   );
@@ -377,6 +498,16 @@ const simulatePayment = async (req, res) => {
   }
   if (order.user_id !== req.user.id && order.attendee_email !== req.user.email) {
     return res.status(403).json({ success: false, message: 'Not authorized for this order' });
+  }
+  if (order.status === 'pending' && order.expires_at && new Date(order.expires_at) < new Date()) {
+    await queryOne(
+      `UPDATE orders
+       SET status = 'expired', updated_at = NOW()
+       WHERE id = $1
+         AND status = 'pending'`,
+      [order.id]
+    ).catch(() => {});
+    return res.status(410).json({ success: false, message: 'This pending order has expired. Please create a new order.' });
   }
   if (order.status === 'success') {
     return res.status(409).json({ success: false, message: 'Order already paid' });

@@ -2,6 +2,7 @@
 const { query, queryOne } = require('../config/db');
 const { v4: uuidv4 }      = require('uuid');
 const { sendWaitlistEmail } = require('../utils/mailer');
+const { createWaitlistAvailableNotification } = require('../utils/notificationService');
 
 // ── POST /api/waitlist ────────────────────────────────────────
 // Join the waitlist for a sold-out event.
@@ -105,7 +106,7 @@ const notifyNextOnWaitlist = async (eventId) => {
 
     // Get the next person (oldest entry, not yet notified)
     const next = await queryOne(
-      `SELECT id, name, email FROM waitlist
+      `SELECT id, user_id, name, email FROM waitlist
        WHERE event_id = $1 AND notified = FALSE
        ORDER BY created_at ASC LIMIT 1`,
       [eventId]
@@ -130,6 +131,13 @@ const notifyNextOnWaitlist = async (eventId) => {
       checkoutUrl,
       hoursToAct:  24,
     }).catch(err => console.error('[waitlist] email error:', err.message));
+
+    await createWaitlistAvailableNotification(null, {
+      userId: next.user_id,
+      eventId,
+      eventTitle: event.title,
+      waitlistId: next.id,
+    }).catch(() => {});
 
     console.log(`[waitlist] Notified ${next.email} for event ${event.title}`);
   } catch (err) {

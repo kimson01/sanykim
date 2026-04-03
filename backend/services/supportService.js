@@ -6,6 +6,7 @@ const {
   canReplyToTicket,
   canSoftDeleteTicket,
 } = require('./supportAccessService');
+const { createSupportNotification } = require('../utils/notificationService');
 
 const ORDER_ROUTED_CATEGORIES = new Set(['tickets', 'payments', 'refunds']);
 const INTERNAL_STATUSES = new Set(['new', 'in_review', 'waiting_organizer', 'escalated', 'resolved', 'closed']);
@@ -85,15 +86,16 @@ async function resolveUserIdByEmail(email) {
 }
 
 async function resolveOrderContext(orderRef) {
-  if (!orderRef) return { order_id: null, event_id: null, organizer_id: null };
+  if (!orderRef) return { order_id: null, event_id: null, organizer_id: null, organizer_user_id: null };
   const row = await queryOne(
-    `SELECT o.id AS order_id, o.event_id, e.organizer_id
+    `SELECT o.id AS order_id, o.event_id, e.organizer_id, org.user_id AS organizer_user_id
      FROM orders o
      LEFT JOIN events e ON e.id = o.event_id
+     LEFT JOIN organizers org ON org.id = e.organizer_id
      WHERE o.order_ref = $1`,
     [orderRef]
   );
-  return row || { order_id: null, event_id: null, organizer_id: null };
+  return row || { order_id: null, event_id: null, organizer_id: null, organizer_user_id: null };
 }
 
 async function getPrimarySuperAdminId() {
@@ -129,6 +131,7 @@ function buildTicketSelectSql(scope) {
          u.name AS user_name,
          u.email AS user_email,
          o.company_name AS organizer_name,
+         o.user_id AS organizer_user_id,
          ev.title AS event_title,
          ord.order_ref,
          au.name AS assigned_admin_name,
@@ -204,6 +207,15 @@ async function getTicketById(ticketId, scope = null) {
     [ticketId]
   );
   return row ? { ...row, status_group: statusGroup(row.status) } : null;
+}
+
+async function notifySupportRecipients(client, recipients, buildNotification) {
+  const uniqueRecipients = [...new Set((recipients || []).filter(Boolean))];
+  for (const userId of uniqueRecipients) {
+    const payload = buildNotification(userId);
+    if (!payload) continue;
+    await createSupportNotification(client, { userId, ...payload }).catch(() => {});
+  }
 }
 
 async function assertTicketAccess(actor, ticketId, predicate = canViewTicket) {
@@ -288,6 +300,27 @@ async function createTicket(actor, payload) {
       priority,
       routed_to_organizer: routedToOrganizer,
     });
+    await notifySupportRecipients(
+      client,
+      [
+        adminId && adminId !== actor?.id ? adminId : null,
+        routedToOrganizer && orderContext.organizer_user_id !== actor?.id ? orderContext.organizer_user_id : null,
+      ],
+      (recipientId) => ({
+        type: recipientId === orderContext.organizer_user_id ? 'support_ticket_assigned' : 'support_ticket_created',
+        title: recipientId === orderContext.organizer_user_id ? 'Customer issue needs organizer action' : 'New support ticket',
+        message: `${ticketRef}: ${payload.subject}`,
+        linkUrl: recipientId === orderContext.organizer_user_id ? '/organizer/conflicts' : '/admin/conflicts',
+        dedupeKey: `support_ticket_created:${ticketId}:${recipientId}`,
+        data: {
+          ticket_id: ticketId,
+          ticket_ref: ticketRef,
+          subject: payload.subject,
+          category,
+          status: initialStatus,
+        },
+      })
+    );
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -483,6 +516,33 @@ async function addMessage(actor, ticketId, payload) {
       is_internal: isInternal,
       previous_status: ticket.status,
     });
+    if (!isInternal) {
+      await notifySupportRecipients(
+        client,
+        [
+          ticket.user_id !== actor.id ? ticket.user_id : null,
+          ticket.organizer_user_id !== actor.id ? ticket.organizer_user_id : null,
+          ticket.assigned_admin_id !== actor.id ? ticket.assigned_admin_id : null,
+        ],
+        (recipientId) => ({
+          type: 'support_message_posted',
+          title: 'New support reply',
+          message: `${ticket.ticket_ref}: ${body.slice(0, 120)}`,
+          linkUrl:
+            recipientId === ticket.assigned_admin_id ? '/admin/conflicts'
+            : recipientId === ticket.organizer_user_id ? '/organizer/conflicts'
+            : '/customer-care',
+          dedupeKey: `support_message:${messageId}:${recipientId}`,
+          data: {
+            ticket_id: ticketId,
+            ticket_ref: ticket.ticket_ref,
+            message_id: messageId,
+            author_role: scope.role,
+            status: ticket.status,
+          },
+        })
+      );
+    }
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -588,6 +648,51 @@ async function updateTicket(actor, ticketId, payload) {
     for (const event of events) {
       await logEvent(client, ticketId, actor.id, scope.role, event.type, event.payload);
     }
+    if (payload.status !== undefined && payload.status !== ticket.status) {
+      await notifySupportRecipients(
+        client,
+        [
+          ticket.user_id !== actor.id ? ticket.user_id : null,
+          ticket.organizer_user_id !== actor.id ? ticket.organizer_user_id : null,
+          ticket.assigned_admin_id !== actor.id ? ticket.assigned_admin_id : null,
+        ],
+        (recipientId) => ({
+          type: 'support_status_changed',
+          title: 'Support ticket updated',
+          message: `${ticket.ticket_ref} is now ${statusGroup(payload.status)}.`,
+          linkUrl:
+            recipientId === ticket.assigned_admin_id ? '/admin/conflicts'
+            : recipientId === ticket.organizer_user_id ? '/organizer/conflicts'
+            : '/customer-care',
+          data: {
+            ticket_id: ticketId,
+            ticket_ref: ticket.ticket_ref,
+            from_status: ticket.status,
+            to_status: payload.status,
+          },
+        })
+      );
+    }
+    if (
+      payload.assigned_admin_id !== undefined &&
+      payload.assigned_admin_id &&
+      payload.assigned_admin_id !== actor.id &&
+      payload.assigned_admin_id !== ticket.assigned_admin_id
+    ) {
+      await createSupportNotification(client, {
+        userId: payload.assigned_admin_id,
+        type: 'support_ticket_assigned',
+        title: 'Support ticket assigned',
+        message: `${ticket.ticket_ref}: ${ticket.subject}`,
+        linkUrl: '/admin/conflicts',
+        dedupeKey: `support_assignment:${ticketId}:${payload.assigned_admin_id}`,
+        data: {
+          ticket_id: ticketId,
+          ticket_ref: ticket.ticket_ref,
+          subject: ticket.subject,
+        },
+      }).catch(() => {});
+    }
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -623,6 +728,28 @@ async function escalateTicket(actor, ticketId, reason) {
       from: ticket.status,
       reason: reason || null,
     });
+    await notifySupportRecipients(
+      client,
+      [
+        ticket.user_id !== actor.id ? ticket.user_id : null,
+        ticket.organizer_user_id !== actor.id ? ticket.organizer_user_id : null,
+        ticket.assigned_admin_id !== actor.id ? ticket.assigned_admin_id : null,
+      ],
+      (recipientId) => ({
+        type: 'support_ticket_escalated',
+        title: 'Support ticket escalated',
+        message: `${ticket.ticket_ref} was escalated for review.`,
+        linkUrl:
+          recipientId === ticket.assigned_admin_id ? '/admin/conflicts'
+          : recipientId === ticket.organizer_user_id ? '/organizer/conflicts'
+          : '/customer-care',
+        data: {
+          ticket_id: ticketId,
+          ticket_ref: ticket.ticket_ref,
+          reason: reason || null,
+        },
+      })
+    );
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');

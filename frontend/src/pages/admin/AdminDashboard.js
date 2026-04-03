@@ -13,6 +13,53 @@ const ADMIN_ROUTES = {
   conflicts: '/admin/conflicts',
 };
 
+function buildReconciliationAction(issue) {
+  if (!issue) {
+    return { to: '/admin/logs', label: 'Open logs' };
+  }
+
+  if (issue.entity_type === 'transaction' && issue.txn_ref) {
+    return {
+      to: `/admin/transactions?q=${encodeURIComponent(issue.txn_ref)}`,
+      label: 'Open transaction',
+    };
+  }
+
+  if (issue.entity_type === 'order' && issue.order_ref) {
+    return {
+      to: `/admin/transactions?q=${encodeURIComponent(issue.order_ref)}`,
+      label: 'Open order',
+    };
+  }
+
+  if (issue.entity_type === 'organizer' && issue.organizer_name) {
+    return {
+      to: `/admin/organizers?status=approved`,
+      label: 'Open organizers',
+    };
+  }
+
+  return {
+    to: `/admin/logs?q=${encodeURIComponent(issue.summary || issue.issue_type || '')}`,
+    label: 'Open logs',
+  };
+}
+
+function formatIssueLabel(issue) {
+  if (issue?.order_ref) return issue.order_ref;
+  if (issue?.txn_ref) return issue.txn_ref;
+  if (issue?.organizer_name) return issue.organizer_name;
+  return issue?.entity_type || 'Record';
+}
+
+function formatIssueType(issueType) {
+  return String(issueType || 'issue')
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 const DASHBOARD_DEFAULTS = {
   stats: {
     total_events: 0,
@@ -34,6 +81,12 @@ const DASHBOARD_DEFAULTS = {
   daily_revenue: [],
   monthly_revenue: [],
   order_breakdown: [],
+  reconciliation_summary: {
+    open_total: 0,
+    error_total: 0,
+    warning_total: 0,
+  },
+  reconciliation_issues: [],
 };
 
 function normalizeDashboardPayload(payload) {
@@ -52,6 +105,11 @@ function normalizeDashboardPayload(payload) {
     daily_revenue: Array.isArray(source.daily_revenue) ? source.daily_revenue : [],
     monthly_revenue: Array.isArray(source.monthly_revenue) ? source.monthly_revenue : [],
     order_breakdown: Array.isArray(source.order_breakdown) ? source.order_breakdown : [],
+    reconciliation_summary: {
+      ...DASHBOARD_DEFAULTS.reconciliation_summary,
+      ...(source.reconciliation_summary || {}),
+    },
+    reconciliation_issues: Array.isArray(source.reconciliation_issues) ? source.reconciliation_issues : [],
   };
 }
 
@@ -180,6 +238,35 @@ function TransactionRow({ order }) {
   );
 }
 
+function ReconciliationIssueRow({ issue }) {
+  const action = buildReconciliationAction(issue);
+  const label = formatIssueLabel(issue);
+
+  return (
+    <div className="admin-dashboard-recon-row">
+      <div className={`admin-dashboard-recon-accent admin-dashboard-recon-accent-${issue.severity === 'error' ? 'error' : 'warning'}`} />
+      <div className="admin-dashboard-recon-main">
+        <div className="admin-dashboard-recon-topline">
+          <div className="admin-dashboard-list-title">{issue.summary}</div>
+          <div className="admin-dashboard-transaction-tags">
+            <Badge variant={issue.severity === 'error' ? 'red' : 'yellow'}>
+              {issue.severity}
+            </Badge>
+            <Badge variant="gray">{formatIssueType(issue.issue_type)}</Badge>
+          </div>
+        </div>
+        <div className="admin-dashboard-recon-meta">
+          <span>{label}</span>
+          <span>{fmtDate(issue.last_seen_at)}</span>
+        </div>
+      </div>
+      <Link to={action.to} className="admin-dashboard-recon-link">
+        {action.label}
+      </Link>
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const [data, setData] = useState(null);
   const [supportOverview, setSupportOverview] = useState(null);
@@ -236,6 +323,8 @@ export default function AdminDashboard() {
   const dailyRevenue = data?.daily_revenue || DASHBOARD_DEFAULTS.daily_revenue;
   const monthlyRevenue = data?.monthly_revenue || DASHBOARD_DEFAULTS.monthly_revenue;
   const orderBreakdown = data?.order_breakdown || DASHBOARD_DEFAULTS.order_breakdown;
+  const reconciliationSummary = data?.reconciliation_summary || DASHBOARD_DEFAULTS.reconciliation_summary;
+  const reconciliationIssues = data?.reconciliation_issues || DASHBOARD_DEFAULTS.reconciliation_issues;
 
   const orderStatus = (status) => {
     const row = orderBreakdown.find((item) => item.status === status);
@@ -411,6 +500,59 @@ export default function AdminDashboard() {
 
           <div className="admin-dashboard-note">
             High escalations or overdue cases mean the conflicts queue needs attention.
+          </div>
+        </section>
+      </div>
+
+      <div className="admin-dashboard-grid">
+        <section className="admin-dashboard-panel">
+          <SectionHead
+            eyebrow="Payment integrity"
+            title="Reconciliation issues"
+            subtitle="Open mismatches detected by the automated payment reconciliation job."
+            actionLabel="Open transactions"
+            actionTo={ADMIN_ROUTES.transactions}
+          />
+
+          <div className="admin-dashboard-pill-grid admin-dashboard-pill-grid-compact">
+            <div className="admin-dashboard-pill-card admin-dashboard-pill-card-solid">
+              <span>Open issues</span>
+              <strong>{(reconciliationSummary.open_total || 0).toLocaleString()}</strong>
+            </div>
+            <div className="admin-dashboard-pill-card admin-dashboard-pill-card-solid admin-dashboard-pill-card-danger">
+              <span>Errors</span>
+              <strong>{(reconciliationSummary.error_total || 0).toLocaleString()}</strong>
+            </div>
+            <div className="admin-dashboard-pill-card admin-dashboard-pill-card-solid admin-dashboard-pill-card-warning">
+              <span>Warnings</span>
+              <strong>{(reconciliationSummary.warning_total || 0).toLocaleString()}</strong>
+            </div>
+            <div className="admin-dashboard-pill-card admin-dashboard-pill-card-solid admin-dashboard-pill-card-info">
+              <span>Last scan</span>
+              <strong>
+                {reconciliationIssues[0]?.last_seen_at ? fmtDate(reconciliationIssues[0].last_seen_at) : 'None'}
+              </strong>
+            </div>
+          </div>
+
+          {reconciliationIssues.length === 0 ? (
+            <div className="admin-dashboard-empty admin-dashboard-empty-spaced">
+              <i data-lucide="shield-check" style={{ width: 18, height: 18 }} />
+              <span>No open reconciliation issues.</span>
+            </div>
+          ) : (
+            <div className="admin-dashboard-recon-list">
+              {reconciliationIssues.map((issue) => (
+                <ReconciliationIssueRow
+                  key={issue.id || `${issue.issue_type}-${issue.entity_id || issue.summary}`}
+                  issue={issue}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className="admin-dashboard-note">
+            Errors usually mean a paid order is missing tickets or a refund trail is incomplete.
           </div>
         </section>
       </div>

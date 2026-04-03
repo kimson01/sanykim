@@ -1,37 +1,11 @@
 // src/pages/user/UserTickets.js
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ordersAPI, ticketsAPI } from '../../api/client';
+import { ordersAPI } from '../../api/client';
 import { fmtDate, useToast } from '../../components/ui';
 import { QRCodeSVG } from 'qrcode.react';
 import SanyLogo from '../../components/ui/Logo';
-
-// ── PDF download helper ───────────────────────────────────────
-function usePDFDownload() {
-  const [downloading, setDownloading] = useState(null);
-  const { toast } = useToast();
-
-  const download = async (orderId, orderRef) => {
-    setDownloading(orderId);
-    try {
-      const res  = await ticketsAPI.downloadPDF(orderId);
-      const url  = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
-      const link = document.createElement('a');
-      link.href  = url;
-      link.setAttribute('download', `sany-tickets-${orderRef}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      if (link.parentNode === document.body) link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      toast('PDF download failed — please try again', 'error');
-    } finally {
-      setDownloading(null);
-    }
-  };
-
-  return { download, downloading };
-}
+import { useTicketPdfDownload } from '../../utils/useTicketPdfDownload';
 
 function useTicketCodeCopy() {
   const { toast } = useToast();
@@ -60,9 +34,11 @@ function useTicketCodeCopy() {
 
 // ── Single ticket card ────────────────────────────────────────
 function TicketCard({ ticket, onDownload, onCopyCode, downloading }) {
-  const used       = ticket.is_scanned;
-  const statusColor = used ? 'var(--text3)'    : 'var(--accent)';
-  const statusBg    = used ? 'var(--surface3)' : 'var(--accent-dim)';
+  const voided = ticket.is_voided;
+  const used = !voided && ticket.is_scanned;
+  const statusLabel = voided ? 'Refunded' : used ? 'Used' : 'Valid';
+  const statusColor = voided ? 'var(--danger)' : used ? 'var(--text3)' : 'var(--accent)';
+  const statusBg = voided ? 'var(--danger-dim)' : used ? 'var(--surface3)' : 'var(--accent-dim)';
 
   return (
     <div className="ticket-card">
@@ -79,7 +55,7 @@ function TicketCard({ ticket, onDownload, onCopyCode, downloading }) {
             padding: '3px 10px', borderRadius: 20,
             fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', marginLeft: 8,
           }}>
-            {used ? 'Used' : 'Valid'}
+            {statusLabel}
           </span>
         </div>
       </div>
@@ -102,7 +78,7 @@ function TicketCard({ ticket, onDownload, onCopyCode, downloading }) {
           </div>
           <div>
             <div className="form-label">Type</div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: ticket.color || 'var(--accent2)' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: voided ? 'var(--danger)' : (ticket.color || 'var(--accent2)') }}>
               {ticket.ticket_type_name}
             </div>
           </div>
@@ -122,27 +98,49 @@ function TicketCard({ ticket, onDownload, onCopyCode, downloading }) {
       <div className="ticket-dashed" />
 
       <div className="ticket-qr">
-        <div className="qr-container">
-          <QRCodeSVG
-            value={ticket.qr_data || ticket.ticket_code}
-            size={110}
-            bgColor="#ffffff"
-            fgColor="#000000"
-            level="M"
-          />
-        </div>
+        {voided ? (
+          <div style={{
+            minWidth: 130,
+            minHeight: 130,
+            borderRadius: 12,
+            border: '1px dashed rgba(239,68,68,0.35)',
+            background: 'var(--danger-dim)',
+            color: 'var(--danger)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            padding: 16,
+            fontSize: 12,
+            fontWeight: 600,
+          }}>
+            Refunded ticket
+            <br />
+            Not valid for entry
+          </div>
+        ) : (
+          <div className="qr-container">
+            <QRCodeSVG
+              value={ticket.qr_data || ticket.ticket_code}
+              size={110}
+              bgColor="#ffffff"
+              fgColor="#000000"
+              level="M"
+            />
+          </div>
+        )}
       </div>
 
       <div className="ticket-footer">
         <div
-          onClick={() => onCopyCode(ticket.ticket_code)}
-          title="Copy ticket code"
+          onClick={() => !voided && onCopyCode(ticket.ticket_code)}
+          title={voided ? 'Refunded ticket code cannot be used' : 'Copy ticket code'}
           style={{
             fontSize: 11,
             fontFamily: 'monospace',
-            color: 'var(--text2)',
-            cursor: 'pointer',
-            userSelect: 'all',
+            color: voided ? 'var(--text3)' : 'var(--text2)',
+            cursor: voided ? 'default' : 'pointer',
+            userSelect: voided ? 'none' : 'all',
           }}
         >
           {ticket.ticket_code}
@@ -151,7 +149,8 @@ function TicketCard({ ticket, onDownload, onCopyCode, downloading }) {
           <button
             className="btn btn-secondary btn-sm"
             onClick={() => onCopyCode(ticket.ticket_code)}
-            title="Copy ticket code"
+            title={voided ? 'Refunded ticket code cannot be used' : 'Copy ticket code'}
+            disabled={voided}
             style={{ padding: '3px 8px' }}
           >
             <i data-lucide="copy" style={{ width: 12, height: 12 }} /> Copy
@@ -159,8 +158,8 @@ function TicketCard({ ticket, onDownload, onCopyCode, downloading }) {
           <button
             className="btn btn-secondary btn-sm"
             onClick={() => onDownload(ticket.order_id, ticket.order_ref)}
-            disabled={downloading === ticket.order_id}
-            title="Download PDF"
+            disabled={voided || downloading === ticket.order_id}
+            title={voided ? 'Refunded tickets cannot be downloaded as valid tickets' : 'Download PDF'}
             style={{ padding: '3px 8px' }}
           >
             {downloading === ticket.order_id
@@ -178,7 +177,7 @@ function TicketCard({ ticket, onDownload, onCopyCode, downloading }) {
 export default function UserTickets() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { download, downloading } = usePDFDownload();
+  const { download, downloading } = useTicketPdfDownload();
   const { copy } = useTicketCodeCopy();
   const { toast } = useToast();
 

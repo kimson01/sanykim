@@ -1,5 +1,6 @@
 // src/pages/admin/AdminTransactions.js
 import React, { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { adminAPI } from '../../api/client';
 import { Badge, fmtCurrency, fmtDate, useToast } from '../../components/ui';
 
@@ -25,32 +26,21 @@ function RefundModal({ order, onClose, onRefunded }) {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <div className="modal-header">
-          <h3 style={{ fontFamily: 'Syne, sans-serif', fontSize: 17, fontWeight: 700 }}>
-            Issue Refund
-          </h3>
+          <h3 className="admin-section-title" style={{ marginBottom: 0 }}>Issue Refund</h3>
           <button className="btn btn-ghost btn-icon" onClick={onClose}>
             <i data-lucide="x" style={{ width: 16, height: 16 }} />
           </button>
         </div>
         <div className="modal-body">
-          {/* Summary */}
-          <div style={{
-            background: 'var(--surface2)', border: '1px solid var(--border)',
-            borderRadius: 8, padding: '12px 14px', marginBottom: 16,
-          }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{order.event_title}</div>
-            <div style={{ display: 'flex', gap: 20, fontSize: 12, color: 'var(--text2)' }}>
+          <div className="admin-modal-summary">
+            <div className="admin-modal-summary-title">{order.event_title}</div>
+            <div className="admin-modal-summary-meta">
               <span>Order: <span style={{ fontFamily: 'monospace', color: 'var(--text)' }}>{order.order_ref}</span></span>
               <span>Amount: <strong style={{ color: 'var(--accent)' }}>{fmtCurrency(order.amount || order.total)}</strong></span>
             </div>
           </div>
 
-          {/* Warning */}
-          <div style={{
-            background: 'var(--warning-dim)', border: '1px solid rgba(234,179,8,0.25)',
-            borderRadius: 8, padding: '10px 14px', marginBottom: 16,
-            display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: 'var(--warning)',
-          }}>
+          <div className="admin-modal-warning">
             <i data-lucide="triangle-alert" style={{ width: 14, height: 14, marginTop: 1, flexShrink: 0 }} />
             <span>
               This will mark the order as refunded, invalidate all tickets, and reverse the sold count.
@@ -59,11 +49,7 @@ function RefundModal({ order, onClose, onRefunded }) {
           </div>
 
           {error && (
-            <div style={{
-              background: 'var(--danger-dim)', border: '1px solid rgba(239,68,68,0.2)',
-              borderRadius: 8, padding: '10px 14px', marginBottom: 14,
-              fontSize: 13, color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: 8,
-            }}>
+            <div className="admin-modal-error">
               <i data-lucide="circle-x" style={{ width: 14, height: 14, flexShrink: 0 }} />
               {error}
             </div>
@@ -80,7 +66,7 @@ function RefundModal({ order, onClose, onRefunded }) {
             />
           </div>
 
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <div className="admin-modal-actions">
             <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
             <button className="btn btn-danger" onClick={submit} disabled={loading}>
               {loading
@@ -96,16 +82,17 @@ function RefundModal({ order, onClose, onRefunded }) {
 }
 
 export default function AdminTransactions() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const initialFilters = {
-    q: '',
-    status: '',
-    method: '',
-    organizer_id: '',
-    event_id: '',
-    date_from: '',
-    date_to: '',
-    page: 1,
-    limit: 20,
+    q: searchParams.get('q') || '',
+    status: searchParams.get('status') || '',
+    method: searchParams.get('method') || '',
+    organizer_id: searchParams.get('organizer_id') || '',
+    event_id: searchParams.get('event_id') || '',
+    date_from: searchParams.get('date_from') || '',
+    date_to: searchParams.get('date_to') || '',
+    page: parseInt(searchParams.get('page') || '1', 10) || 1,
+    limit: parseInt(searchParams.get('limit') || '20', 10) || 20,
   };
   const [txns, setTxns]         = useState([]);
   const [meta, setMeta]         = useState({ total: 0 });
@@ -164,10 +151,19 @@ export default function AdminTransactions() {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    const next = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value === '' || value === null || value === undefined) return;
+      next.set(key, String(value));
+    });
+    setSearchParams(next, { replace: true });
+  }, [filters, setSearchParams]);
+
   const totalPages = Math.max(1, Math.ceil((meta.total || 0) / (Number(filters.limit) || 20)));
 
   if (loading) return (
-    <div style={{ padding: 40, textAlign: 'center', color: 'var(--text2)' }}>
+    <div className="admin-page-loading">
       <i data-lucide="loader-2" style={{ width: 24, height: 24 }} />
     </div>
   );
@@ -175,14 +171,7 @@ export default function AdminTransactions() {
   return (
     <>
       {summary && (
-        <div className="responsive-stats-strip" style={{
-          gap: 0,
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          borderRadius: 12,
-          overflow: 'hidden',
-          marginBottom: 20,
-        }}>
+        <div className="responsive-stats-strip admin-surface-card admin-stat-strip">
           {[
             { label: 'Successful', value: summary.successful_transactions, sub: fmtCurrency(summary.successful_amount), color: 'var(--accent)' },
             { label: 'Refunded', value: summary.refunded_transactions, sub: fmtCurrency(summary.refunded_amount), color: 'var(--warning)' },
@@ -194,21 +183,19 @@ export default function AdminTransactions() {
               color: Math.abs((recon?.tx_success_total || 0) - (recon?.ledger_sales_total || 0)) < 1 ? 'var(--accent)' : 'var(--danger)',
             },
           ].map((item, index) => (
-            <div key={item.label} style={{ padding: '16px 18px', borderRight: index < 3 ? '1px solid var(--border)' : 'none' }}>
-              <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-                {item.label}
-              </div>
-              <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 22, fontWeight: 800, color: item.color }}>
+            <div key={item.label} className="admin-stat-cell">
+              <div className="admin-stat-label">{item.label}</div>
+              <div className="admin-stat-value" style={{ color: item.color }}>
                 {typeof item.value === 'number' && item.label !== 'Reconciliation' ? item.value.toLocaleString() : item.value}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>{item.sub}</div>
+              <div className="admin-stat-sub">{item.sub}</div>
             </div>
           ))}
         </div>
       )}
 
       <div className="card">
-        <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 600, marginBottom: 16 }}>
+        <div className="admin-section-title">
           All Transactions ({meta.total || txns.length})
         </div>
         <div className="responsive-filter-grid" style={{ marginBottom: 16 }}>
@@ -247,11 +234,11 @@ export default function AdminTransactions() {
           <input className="input" type="date" value={filters.date_from} onChange={setFilter('date_from')} />
           <input className="input" type="date" value={filters.date_to} onChange={setFilter('date_to')} />
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 12, color: 'var(--text2)' }}>
+        <div className="admin-toolbar">
+          <div className="admin-text-subtle">
             Page {filters.page} of {totalPages}
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div className="admin-toolbar-actions">
             <button className="btn btn-secondary btn-sm" onClick={() => setFilters(initialFilters)}>
               Reset
             </button>
@@ -286,37 +273,37 @@ export default function AdminTransactions() {
             <tbody>
               {txns.length === 0 && (
                 <tr>
-                  <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text3)', padding: 32 }}>
+                  <td colSpan={9} className="admin-empty-cell">
                     No transactions match the current filters
                   </td>
                 </tr>
               )}
               {txns.map(t => (
                 <tr key={t.id}>
-                  <td style={{ fontFamily: 'monospace', fontSize: 11 }}>{t.txn_ref}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 11 }}>{t.order_ref}</td>
+                  <td className="admin-mono-sm">{t.txn_ref}</td>
+                  <td className="admin-mono-sm">{t.order_ref}</td>
                   <td style={{ maxWidth: 160 }}>
-                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div className="admin-ellipsis">
                       {t.event_title}
                     </div>
                   </td>
-                  <td style={{ color: 'var(--text2)' }}>{t.attendee_name}</td>
+                  <td className="admin-table-cell-subtle">{t.attendee_name}</td>
                   <td><strong>{fmtCurrency(t.amount)}</strong></td>
                   <td>
                     <Badge variant="blue">{t.method?.toUpperCase()}</Badge>
                   </td>
                   <td>
                     <Badge variant={
-                      t.status === 'success'  ? 'green'  :
-                      t.status === 'refunded' ? 'orange' :
-                      t.status === 'pending'  ? 'yellow' : 'red'
+                      (t.display_status || t.status) === 'success'  ? 'green'  :
+                      (t.display_status || t.status) === 'refunded' ? 'orange' :
+                      (t.display_status || t.status) === 'pending'  ? 'yellow' : 'red'
                     }>
-                      {t.status}
+                      {t.display_status || t.status}
                     </Badge>
                   </td>
-                  <td style={{ color: 'var(--text2)', fontSize: 12 }}>{fmtDate(t.created_at)}</td>
+                  <td className="admin-table-cell-subtle">{fmtDate(t.created_at)}</td>
                   <td>
-                    {t.status === 'success' && (
+                    {t.is_refundable && (
                       <button
                         className="btn btn-danger btn-sm"
                         onClick={() => setRefundTarget(t)}
@@ -326,8 +313,8 @@ export default function AdminTransactions() {
                         Refund
                       </button>
                     )}
-                    {t.status === 'refunded' && (
-                      <span style={{ fontSize: 11, color: 'var(--text3)' }}>Refunded</span>
+                    {!t.is_refundable && (t.display_status || t.status) === 'refunded' && (
+                      <span className="admin-stat-sub">Refunded</span>
                     )}
                   </td>
                 </tr>
@@ -338,28 +325,20 @@ export default function AdminTransactions() {
       </div>
 
       {recon && (
-        <div style={{
-          marginTop: 20,
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          borderRadius: 12,
-          padding: '16px 18px',
-        }}>
-          <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text3)', marginBottom: 12 }}>
-            Platform Reconciliation
-          </div>
+        <div className="admin-surface-card admin-note-card">
+          <div className="admin-note-title">Platform Reconciliation</div>
           <div className="responsive-grid-3" style={{ gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text3)' }}>Successful orders</div>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>{fmtCurrency(recon.orders_success_total)}</div>
+            <div className="admin-kpi-card">
+              <div className="admin-stat-label">Successful orders</div>
+              <div className="admin-detail-value admin-detail-value-strong">{fmtCurrency(recon.orders_success_total)}</div>
             </div>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text3)' }}>Successful transactions</div>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>{fmtCurrency(recon.tx_success_total)}</div>
+            <div className="admin-kpi-card">
+              <div className="admin-stat-label">Successful transactions</div>
+              <div className="admin-detail-value admin-detail-value-strong">{fmtCurrency(recon.tx_success_total)}</div>
             </div>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text3)' }}>Ledger sales</div>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>{fmtCurrency(recon.ledger_sales_total)}</div>
+            <div className="admin-kpi-card">
+              <div className="admin-stat-label">Ledger sales</div>
+              <div className="admin-detail-value admin-detail-value-strong">{fmtCurrency(recon.ledger_sales_total)}</div>
             </div>
           </div>
         </div>

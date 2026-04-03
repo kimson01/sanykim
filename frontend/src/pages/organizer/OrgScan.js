@@ -16,11 +16,12 @@ function ResultBanner({ result, onDismiss }) {
 
   const ok      = result.ok;
   const already = result.already;
-  const bg      = ok ? 'var(--accent-dim)'  : already ? 'var(--warning-dim)'  : 'var(--danger-dim)';
-  const border  = ok ? 'rgba(34,197,94,0.2)' : already ? 'rgba(234,179,8,0.2)' : 'rgba(239,68,68,0.2)';
-  const color   = ok ? 'var(--accent)'       : already ? 'var(--warning)'       : 'var(--danger)';
-  const icon    = ok ? 'check-circle'        : already ? 'alert-triangle'        : 'x-circle';
-  const title   = ok ? 'Valid — entry granted' : already ? 'Already used' : 'Invalid ticket';
+  const voided  = result.voided;
+  const bg      = ok ? 'var(--accent-dim)' : voided ? 'var(--danger-dim)' : already ? 'var(--warning-dim)' : 'var(--danger-dim)';
+  const border  = ok ? 'rgba(34,197,94,0.2)' : voided ? 'rgba(239,68,68,0.24)' : already ? 'rgba(234,179,8,0.2)' : 'rgba(239,68,68,0.2)';
+  const color   = ok ? 'var(--accent)' : voided ? 'var(--danger)' : already ? 'var(--warning)' : 'var(--danger)';
+  const icon    = ok ? 'check-circle' : voided ? 'shield-x' : already ? 'alert-triangle' : 'x-circle';
+  const title   = ok ? 'Valid — entry granted' : voided ? 'Voided ticket' : already ? 'Already used' : 'Invalid ticket';
 
   return (
     <div style={{
@@ -192,8 +193,8 @@ function ScanLog({ entries }) {
             </div>
             <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'monospace' }}>{e.code}</div>
           </div>
-          <span className={`badge ${e.ok ? 'badge-green' : e.already ? 'badge-yellow' : 'badge-red'}`}>
-            {e.ok ? 'Valid' : e.already ? 'Used' : 'Invalid'}
+          <span className={`badge ${e.ok ? 'badge-green' : e.voided ? 'badge-red' : e.already ? 'badge-yellow' : 'badge-red'}`}>
+            {e.ok ? 'Valid' : e.voided ? 'Voided' : e.already ? 'Used' : 'Invalid'}
           </span>
         </div>
       ))}
@@ -228,12 +229,14 @@ export default function OrgScan() {
       }, ...l.slice(0, 9)]);
     } catch (err) {
       const already = err.response?.status === 409;
+      const issueCode = err.response?.data?.data?.code || '';
+      const voided = issueCode === 'ticket_voided';
       const msg     = err.response?.data?.message || 'Scan failed';
-      const bad     = { ok: false, already, message: msg, data: err.response?.data?.data };
+      const bad     = { ok: false, already, voided, message: msg, data: err.response?.data?.data };
       setResult(bad);
       setLog(l => [{
-        ok: false, already,
-        label: already ? 'Already used' : 'Invalid ticket',
+        ok: false, already, voided,
+        label: voided ? 'Refunded / voided' : already ? 'Already used' : 'Invalid ticket',
         code:  ticketCode,
       }, ...l.slice(0, 9)]);
     } finally {

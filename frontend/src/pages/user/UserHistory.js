@@ -1,34 +1,8 @@
 // src/pages/user/UserHistory.js
 import React, { useEffect, useState } from 'react';
-import { ordersAPI, ticketsAPI } from '../../api/client';
+import { ordersAPI } from '../../api/client';
 import { Badge, fmtCurrency, fmtDate, useToast } from '../../components/ui';
-
-// ── PDF download hook ─────────────────────────────────────────
-function usePDFDownload() {
-  const [downloading, setDownloading] = useState(null);
-  const { toast } = useToast();
-
-  const download = async (orderId, orderRef) => {
-    setDownloading(orderId);
-    try {
-      const res  = await ticketsAPI.downloadPDF(orderId);
-      const url  = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
-      const link = document.createElement('a');
-      link.href  = url;
-      link.setAttribute('download', `sany-tickets-${orderRef}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      if (link.parentNode === document.body) link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      toast('PDF download failed', 'error');
-    } finally {
-      setDownloading(null);
-    }
-  };
-
-  return { download, downloading };
-}
+import { useTicketPdfDownload } from '../../utils/useTicketPdfDownload';
 
 const statusVariant = (status) => (
   status === 'success' ? 'green' :
@@ -39,7 +13,7 @@ const statusVariant = (status) => (
 export default function UserHistory() {
   const [orders, setOrders]   = useState([]);
   const [loading, setLoading] = useState(true);
-  const { download, downloading } = usePDFDownload();
+  const { download, downloading } = useTicketPdfDownload('PDF download failed');
   const { toast } = useToast();
 
   useEffect(() => {

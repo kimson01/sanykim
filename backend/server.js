@@ -3,43 +3,13 @@ require('dotenv').config();
 const express     = require('express');
 const cors        = require('cors');
 const helmet      = require('helmet');
-const rateLimit   = require('express-rate-limit');
 const compression = require('compression');
 const path        = require('path');
 const { waitForDb, closePool } = require('./config/db');
-const { createSharedRateLimitStore } = require('./config/rateLimit');
+const { buildRateLimiter } = require('./config/rateLimit');
 const { startQueuedBackgroundJobs, stopQueuedBackgroundJobs } = require('./utils/jobQueue');
 
 const app = express();
-
-const isLocalRequest = (req) => {
-  const ip = String(req.ip || req.socket?.remoteAddress || '');
-  return (
-    ip === '127.0.0.1' ||
-    ip === '::1' ||
-    ip === '::ffff:127.0.0.1' ||
-    ip.endsWith('localhost')
-  );
-};
-
-const shouldSkipRateLimit = (req) =>
-  process.env.NODE_ENV !== 'production' && isLocalRequest(req);
-
-const buildRateLimiter = ({ windowMs, max, message }) => {
-  const options = {
-    windowMs,
-    max,
-    skip: shouldSkipRateLimit,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message,
-  };
-
-  const store = createSharedRateLimitStore();
-  if (store) options.store = store;
-
-  return rateLimit(options);
-};
 
 // ─── Trust proxy ─────────────────────────────────────────────
 // When running behind Nginx, Railway, or any reverse proxy, Express
@@ -172,6 +142,7 @@ app.use('/api/uploads',    require('./routes/uploads'));
 app.use('/api/waitlist',   require('./routes/waitlist'));
 app.use('/api/organisers', require('./routes/organisers'));
 app.use('/api/support',    require('./routes/support'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 // ─── Categories ──────────────────────────────────────────────
 app.get('/api/categories', async (_req, res) => {

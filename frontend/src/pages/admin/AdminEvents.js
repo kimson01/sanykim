@@ -75,7 +75,7 @@ export default function AdminEvents() {
   const filters = ['all', 'published', 'draft', 'cancelled', 'completed'];
 
   if (loading) return (
-    <div style={{ padding: 40, textAlign: 'center', color: 'var(--text2)' }}>
+    <div className="admin-page-loading">
       <i data-lucide="loader-2" style={{ width: 24, height: 24 }} />
     </div>
   );
@@ -83,32 +83,25 @@ export default function AdminEvents() {
   return (
     <div className="card">
       {kycWarning && (
-        <div style={{
-          display: 'flex', alignItems: 'flex-start', gap: 10,
-          padding: '11px 14px', marginBottom: 14,
-          background: 'var(--warning-dim)', border: '1px solid rgba(212,133,10,0.35)',
-          borderRadius: 10,
-        }}>
+        <div className="admin-warning-banner">
           <i data-lucide="shield-alert" style={{ width: 15, height: 15, color: 'var(--warning)', flexShrink: 0, marginTop: 1 }} />
-          <div style={{ fontSize: 12, color: 'var(--warning)', flex: 1 }}>{kycWarning}</div>
+          <div className="admin-warning-copy">{kycWarning}</div>
           <button className="btn btn-ghost btn-sm" onClick={() => setKycWarning('')}>Dismiss</button>
         </div>
       )}
-      {/* Header + filter chips */}
       <div className="responsive-header" style={{ marginBottom: 16 }}>
-        <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 15 }}>
+        <div className="admin-section-title" style={{ fontSize: 15, marginBottom: 0 }}>
           All Events
-          <span style={{ color: 'var(--text3)', fontWeight: 400, fontSize: 13, marginLeft: 8 }}>
+          <span className="admin-text-subtle" style={{ fontWeight: 400, marginLeft: 8 }}>
             ({events.length})
           </span>
         </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <div className="admin-filter-chips">
           {filters.map(f => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`btn btn-sm ${filter === f ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ textTransform: 'capitalize' }}
+              className={`btn btn-sm admin-filter-chip ${filter === f ? 'btn-primary' : 'btn-secondary'}`}
             >
               {f}
             </button>
@@ -133,7 +126,7 @@ export default function AdminEvents() {
           <tbody>
             {events.length === 0 && (
               <tr>
-                <td colSpan={8} style={{ textAlign: 'center', color: 'var(--text3)', padding: 32 }}>
+                <td colSpan={8} className="admin-empty-cell">
                   No events found
                 </td>
               </tr>
@@ -142,35 +135,34 @@ export default function AdminEvents() {
               const isBusy = acting === e.id;
               return (
                 <tr key={e.id}>
-                  {/* Event name + location */}
-                  <td style={{ minWidth: 200 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <td className="admin-event-cell">
+                    <div className="admin-event-row">
                       {e.banner_url && (
                         <img
                           src={e.banner_url} alt=""
-                          style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }}
+                          className="admin-event-thumb"
                         />
                       )}
                       <div>
-                        <div style={{ fontWeight: 500 }}>{e.title}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text2)' }}>{e.location}</div>
+                        <div className="admin-event-title">{e.title}</div>
+                        <div className="admin-event-meta">{e.location}</div>
                       </div>
                     </div>
                   </td>
 
-                  <td style={{ color: 'var(--text2)', fontSize: 12 }}>{e.organizer}</td>
+                  <td className="admin-table-cell-subtle">{e.organizer}</td>
 
-                  <td style={{ color: 'var(--text2)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                  <td className="admin-table-cell-subtle" style={{ whiteSpace: 'nowrap' }}>
                     {fmtDate(e.event_date)}
                   </td>
 
                   <td>
-                    <div style={{ fontSize: 13 }}>{e.total_sold} / {e.capacity}</div>
-                    <div style={{ background: 'var(--surface3)', borderRadius: 2, height: 3, marginTop: 4, width: 60 }}>
-                      <div style={{
-                        background: 'var(--accent)', height: '100%', borderRadius: 2,
-                        width: `${Math.min(Math.round((e.total_sold / e.capacity) * 100), 100)}%`,
-                      }} />
+                    <div className="admin-capacity-text">{e.total_sold} / {e.capacity}</div>
+                    <div className="admin-capacity-bar">
+                      <div
+                        className="admin-capacity-fill"
+                        style={{ width: `${Math.min(Math.round((e.total_sold / e.capacity) * 100), 100)}%` }}
+                      />
                     </div>
                   </td>
 
@@ -197,9 +189,8 @@ export default function AdminEvents() {
                     </button>
                   </td>
 
-                  {/* Status actions */}
                   <td>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <div className="admin-action-cluster">
                       {e.status !== 'published' && (
                         <button
                           className="btn btn-primary btn-sm"

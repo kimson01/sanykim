@@ -9,19 +9,12 @@
 const { query } = require('../config/db');
 const { sendAbandonmentEmail } = require('./mailer');
 const { isDbConnectivityError } = require('./dbErrors');
+const { parseJsonObject } = require('./jsonField');
 
 const CHECK_INTERVAL_MS = 10 * 60 * 1000; // every 10 minutes
 let lastConnectivityLogAt = 0;
 
-const parseNotes = (value) => {
-  if (!value) return {};
-  if (typeof value === 'object') return value;
-  try {
-    return JSON.parse(value);
-  } catch (_) {
-    return {};
-  }
-};
+const parseNotes = (value) => parseJsonObject(value, {});
 
 async function runAbandonmentCheck() {
   try {

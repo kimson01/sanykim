@@ -111,6 +111,7 @@ const scanTicket = async (req, res) => {
         success: false,
         message: 'Ticket is voided',
         data: {
+          code: 'ticket_voided',
           ticket_code: ticket.ticket_code,
           voided_at: ticket.voided_at,
           void_reason: ticket.void_reason,
@@ -134,7 +135,11 @@ const scanTicket = async (req, res) => {
       return res.status(409).json({
         success: false,
         message: 'Ticket already used',
-        data: { scanned_at: ticket.scanned_at, ticket_code: ticket.ticket_code },
+        data: {
+          code: 'ticket_used',
+          scanned_at: ticket.scanned_at,
+          ticket_code: ticket.ticket_code,
+        },
       });
     }
 

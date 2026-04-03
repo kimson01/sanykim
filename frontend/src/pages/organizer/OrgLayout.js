@@ -3,6 +3,7 @@ import React from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar    from '../../components/layout/Sidebar';
 import MobileNav  from '../../components/layout/MobileNav';
+import NotificationMenu from '../../components/layout/NotificationMenu';
 import ThemeControl from '../../components/ui/ThemeControl';
 import { useAuth } from '../../context/AuthContext';
 
@@ -26,6 +27,7 @@ export default function OrgLayout() {
         <div className="topbar">
           <span className="topbar-title">{titles[loc.pathname] || 'Organizer'}</span>
           <div className="responsive-actions">
+            <NotificationMenu />
             <ThemeControl compact />
             <Link to="/" className="btn btn-ghost btn-sm">
               <i data-lucide="external-link" style={{ width: 13, height: 13 }} /> View Site

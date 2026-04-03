@@ -97,6 +97,13 @@ export const paymentsAPI = {
   simulate: (data) => api.post('/payments/simulate', data),
 };
 
+// ─── Notifications ───────────────────────────────────────────
+export const notificationsAPI = {
+  list:       (params) => api.get('/notifications', { params }),
+  read:       (id)     => api.post(`/notifications/${id}/read`),
+  readAll:    ()       => api.post('/notifications/read-all'),
+};
+
 // ─── Uploads ───────────────────────────────────────────────────
 export const uploadsAPI = {
   banner: (formData) => api.post('/uploads/banner', formData, {

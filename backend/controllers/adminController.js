@@ -10,10 +10,20 @@ const {
   logPlatformEvent,
   getRequestMeta,
 } = require('../utils/platformLogger');
+const { parseJsonObject } = require('../utils/jsonField');
+const {
+  createOrderRefundedNotification,
+  createOrganizerPayoutNotification,
+} = require('../utils/notificationService');
 
 const toPositiveInt = (value, fallback) => {
   const parsed = parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const parseOrderNotes = (value) => {
+  if (!value) return {};
+  return parseJsonObject(value, { legacy_note: String(value) });
 };
 
 let ensureAdminLogTablePromise = null;
@@ -70,6 +80,7 @@ const getDashboard = async (req, res) => {
       recentOrders, topEvents, pendingOrgs,
       todayOrders, weekOrders, userCount,
       pendingOrgsDetail, topOrganizers,
+      reconciliationSummary, reconciliationIssues,
     ] = await Promise.all([
       // Core counts
       queryOne(`SELECT COUNT(*) AS total FROM events WHERE status = 'published'`),
@@ -118,6 +129,42 @@ const getDashboard = async (req, res) => {
              WHERE o.status = 'approved'
              GROUP BY o.id, u.name, o.company_name, o.total_revenue, o.commission
              ORDER BY o.total_revenue DESC LIMIT 5`),
+      queryOne(`SELECT
+                  COUNT(*)::int AS open_total,
+                  COUNT(*) FILTER (WHERE severity = 'error')::int AS error_total,
+                  COUNT(*) FILTER (WHERE severity = 'warning')::int AS warning_total
+                FROM reconciliation_issues
+                WHERE status = 'open'`),
+      query(`SELECT
+               ri.id,
+               ri.issue_type,
+               ri.entity_type,
+               ri.entity_id,
+               ri.severity,
+               ri.summary,
+               ri.last_seen_at,
+               o.order_ref,
+               t.txn_ref,
+               org.company_name AS organizer_name
+             FROM reconciliation_issues ri
+             LEFT JOIN orders o
+               ON ri.entity_type = 'order'
+              AND o.id = ri.entity_id
+             LEFT JOIN transactions t
+               ON ri.entity_type = 'transaction'
+              AND t.id = ri.entity_id
+             LEFT JOIN organizers org
+               ON ri.entity_type = 'organizer'
+              AND org.id = ri.entity_id
+             WHERE ri.status = 'open'
+             ORDER BY
+               CASE ri.severity
+                 WHEN 'error' THEN 1
+                 WHEN 'warning' THEN 2
+                 ELSE 3
+               END,
+               ri.last_seen_at DESC
+             LIMIT 5`),
     ]);
 
     // Daily revenue — last 14 days
@@ -169,6 +216,12 @@ const getDashboard = async (req, res) => {
         daily_revenue:          daily.rows,
         monthly_revenue:        monthly.rows,
         order_breakdown:        orderBreakdown.rows,
+        reconciliation_summary: {
+          open_total: parseInt(reconciliationSummary?.open_total || 0, 10),
+          error_total: parseInt(reconciliationSummary?.error_total || 0, 10),
+          warning_total: parseInt(reconciliationSummary?.warning_total || 0, 10),
+        },
+        reconciliation_issues: reconciliationIssues.rows,
       },
     });
   } catch (err) {
@@ -563,8 +616,21 @@ const getTransactions = async (req, res) => {
   const offset = (page - 1) * limit;
   const params = [];
   const where = [];
+  const statusExpression = `CASE
+    WHEN o.status = 'refunded' AND t.status = 'success' THEN 'refunded'
+    ELSE t.status
+  END`;
+  const visibilityClause = `NOT (
+    t.status = 'success'
+    AND EXISTS (
+      SELECT 1
+      FROM transactions tr_refund
+      WHERE tr_refund.order_id = t.order_id
+        AND tr_refund.status = 'refunded'
+    )
+  )`;
 
-  if (req.query.status) where.push(`t.status = $${params.push(req.query.status)}`);
+  if (req.query.status) where.push(`${statusExpression} = $${params.push(req.query.status)}`);
   if (req.query.method) where.push(`t.method = $${params.push(req.query.method)}`);
   if (req.query.organizer_id) where.push(`e.organizer_id = $${params.push(req.query.organizer_id)}`);
   if (req.query.event_id) where.push(`e.id = $${params.push(req.query.event_id)}`);
@@ -582,7 +648,8 @@ const getTransactions = async (req, res) => {
     )`);
   }
 
-  const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const allWhere = [visibilityClause, ...where];
+  const whereClause = `WHERE ${allWhere.join(' AND ')}`;
   try {
     const [rows, countRow, summaryRow, reconRow] = await Promise.all([
       query(
@@ -590,6 +657,11 @@ const getTransactions = async (req, res) => {
                 o.id AS order_id,
                 o.order_ref,
                 o.status AS order_status,
+                ${statusExpression} AS display_status,
+                CASE
+                  WHEN t.status = 'success' AND o.status = 'success' THEN TRUE
+                  ELSE FALSE
+                END AS is_refundable,
                 o.attendee_name,
                 o.attendee_email,
                 o.total AS order_total,
@@ -619,11 +691,11 @@ const getTransactions = async (req, res) => {
       queryOne(
         `SELECT
            COUNT(*)::int AS total_transactions,
-           COUNT(*) FILTER (WHERE t.status = 'success')::int AS successful_transactions,
-           COUNT(*) FILTER (WHERE t.status = 'refunded')::int AS refunded_transactions,
-           COUNT(*) FILTER (WHERE t.status = 'pending')::int AS pending_transactions,
-           COALESCE(SUM(t.amount) FILTER (WHERE t.status = 'success'), 0) AS successful_amount,
-           COALESCE(SUM(t.amount) FILTER (WHERE t.status = 'refunded'), 0) AS refunded_amount
+           COUNT(*) FILTER (WHERE ${statusExpression} = 'success')::int AS successful_transactions,
+           COUNT(*) FILTER (WHERE ${statusExpression} = 'refunded')::int AS refunded_transactions,
+           COUNT(*) FILTER (WHERE ${statusExpression} = 'pending')::int AS pending_transactions,
+           COALESCE(SUM(t.amount) FILTER (WHERE ${statusExpression} = 'success'), 0) AS successful_amount,
+           COALESCE(SUM(t.amount) FILTER (WHERE ${statusExpression} = 'refunded'), 0) AS refunded_amount
          FROM transactions t
          JOIN orders o ON o.id = t.order_id
          JOIN events e ON e.id = o.event_id
@@ -882,7 +954,10 @@ const getOrgLedger = async (req, res) => {
     ]);
     // Current balance from organizer row (source of truth)
     const org = await queryOne(
-      `SELECT available_balance, total_revenue, total_paid_out FROM organizers WHERE id = $1`, [id]
+      `SELECT available_balance, refund_liability, total_revenue, total_paid_out
+       FROM organizers
+       WHERE id = $1`,
+      [id]
     );
     return res.json({
       success: true,
@@ -911,7 +986,7 @@ const recordPayout = async (req, res) => {
   try {
     // Check organizer has enough available balance
     const org = await queryOne(
-      `SELECT id, company_name, available_balance FROM organizers WHERE id = $1`, [id]
+      `SELECT id, user_id, company_name, available_balance FROM organizers WHERE id = $1`, [id]
     );
     if (!org) return res.status(404).json({ success: false, message: 'Organizer not found' });
 
@@ -993,6 +1068,14 @@ const recordPayout = async (req, res) => {
         },
         ...getRequestMeta(req),
       }, dbClient);
+
+      await createOrganizerPayoutNotification(dbClient, {
+        userId: org.user_id,
+        payoutId,
+        amount: payoutAmt,
+        method,
+        reference: reference || null,
+      }).catch(() => {});
 
       await dbClient.query('COMMIT');
     } catch (e) {
@@ -1114,7 +1197,7 @@ const refundOrder = async (req, res) => {
 
     // Lock the order row — include commission_amt for correct reversal
     const orderRes = await client.query(
-      `SELECT o.*, e.organizer_id
+      `SELECT o.*, e.organizer_id, e.title AS event_title
        FROM orders o
        JOIN events e ON e.id = o.event_id
        WHERE o.id = $1
@@ -1145,14 +1228,23 @@ const refundOrder = async (req, res) => {
       throw new Error('Order already refunded');
     }
 
+    const nextNotes = {
+      ...parseOrderNotes(order.notes),
+      refund: {
+        refunded_at: new Date().toISOString(),
+        refunded_by: req.user.id,
+        reason: reason || null,
+      },
+    };
+
     // ── 1. Mark order refunded ────────────────────────────
     await client.query(
       `UPDATE orders
        SET status = 'refunded',
-           notes  = COALESCE(notes,'') || $1,
+           notes  = $1,
            updated_at = NOW()
        WHERE id = $2`,
-      [reason ? `\nRefund reason: ${reason}` : '\nRefunded by admin', id]
+      [JSON.stringify(nextNotes), id]
     );
 
     // ── 2. Invalidate tickets without polluting scan state ─
@@ -1199,16 +1291,30 @@ const refundOrder = async (req, res) => {
     // Organizer gets debited only their net share.
     // The platform commission is handled separately — the platform
     // also loses that money on a refund (it must be returned to the buyer).
+    const orgBeforeRes = await client.query(
+      `SELECT available_balance, refund_liability
+       FROM organizers
+       WHERE id = $1
+       FOR UPDATE`,
+      [order.organizer_id]
+    );
+    const orgBefore = orgBeforeRes.rows[0];
+    const availableBefore = Number(orgBefore?.available_balance || 0);
+    const liabilityBefore = Number(orgBefore?.refund_liability || 0);
+    const refundShortfall = Math.max(0, netToOrg - availableBefore);
+
     const orgBalRes = await client.query(
       `UPDATE organizers
        SET total_revenue     = GREATEST(0, total_revenue     - $1),
            available_balance = GREATEST(0, available_balance - $2),
+           refund_liability  = refund_liability + GREATEST($2 - available_balance, 0),
            updated_at        = NOW()
        WHERE id = $3
-       RETURNING id, available_balance`,
+       RETURNING id, available_balance, refund_liability`,
       [order.total, netToOrg, order.organizer_id]
     );
     const newBalance = orgBalRes.rows[0]?.available_balance || 0;
+    const refundLiability = Number(orgBalRes.rows[0]?.refund_liability || 0);
 
     // ── 6. Write ledger entry — refund ────────────────────
     await client.query(
@@ -1223,7 +1329,9 @@ const refundOrder = async (req, res) => {
         -Number(order.commission_amt),
         -netToOrg,
         newBalance,
-        `Refund — Order ${order.order_ref}${reason ? ': ' + reason : ''}`,
+        refundShortfall > 0
+          ? `Refund — Order ${order.order_ref}${reason ? ': ' + reason : ''} (organizer liability outstanding)`
+          : `Refund — Order ${order.order_ref}${reason ? ': ' + reason : ''}`,
         req.user.id,
       ]
     );
@@ -1251,6 +1359,8 @@ const refundOrder = async (req, res) => {
         reason: reason || null,
         refund_amount: Number(order.total),
         organizer_id: order.organizer_id,
+        refund_shortfall: refundShortfall,
+        refund_liability: refundLiability,
       },
       client
     );
@@ -1268,9 +1378,20 @@ const refundOrder = async (req, res) => {
         commission_amount: Number(order.commission_amt),
         organizer_id: order.organizer_id,
         reason: reason || null,
+        refund_shortfall: refundShortfall,
+        refund_liability: refundLiability,
       },
       ...getRequestMeta(req),
     }, client);
+
+    await createOrderRefundedNotification(client, {
+      userId: order.user_id,
+      orderId: id,
+      orderRef: order.order_ref,
+      eventTitle: order.event_title || 'your event',
+      amount: order.total,
+      reason: reason || null,
+    }).catch(() => {});
 
     await client.query('COMMIT');
 

@@ -4,11 +4,13 @@ const { v4: uuidv4 }            = require('uuid');
 const crypto                    = require('crypto');
 const { confirmOrderInDB }      = require('../utils/confirmOrderHelper');
 const { logPlatformEvent, getRequestMeta } = require('../utils/platformLogger');
+const { parseJsonObject } = require('../utils/jsonField');
 
 const generateOrderRef = () =>
   'ORD-' + Math.random().toString(36).slice(2, 8).toUpperCase();
 
 const PG_UNIQUE_VIOLATION = '23505';
+const PENDING_ORDER_TTL_MINUTES = 30;
 
 const getSettingsMap = async (client, keys = []) => {
   if (!keys.length) return {};
@@ -31,15 +33,25 @@ const asPosInt = (v, fallback) => {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 };
 
-const parseNotes = (value) => {
-  if (!value) return {};
-  if (typeof value === 'object') return value;
-  try {
-    return JSON.parse(value);
-  } catch (_) {
-    return {};
-  }
-};
+const parseNotes = (value) => parseJsonObject(value, {});
+
+const pendingOrderExpirySql = `NOW() + INTERVAL '${PENDING_ORDER_TTL_MINUTES} minutes'`;
+
+async function expireStalePendingOrders(client, { userId = null, eventId = null, orderId = null } = {}) {
+  const params = [];
+  const where = [`status = 'pending'`, `expires_at IS NOT NULL`, `expires_at < NOW()`];
+
+  if (userId) where.push(`user_id = $${params.push(userId)}`);
+  if (eventId) where.push(`event_id = $${params.push(eventId)}`);
+  if (orderId) where.push(`id = $${params.push(orderId)}`);
+
+  await client.query(
+    `UPDATE orders
+     SET status = 'expired', updated_at = NOW()
+     WHERE ${where.join(' AND ')}`,
+    params
+  );
+}
 
 const buildOrderRequestKey = ({
   userId,
@@ -94,6 +106,7 @@ const createOrder = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    await expireStalePendingOrders(client, { userId: req.user.id, eventId: event_id });
 
     const settings = await getSettingsMap(client, [
       'security_fraud_auto_block',
@@ -190,8 +203,8 @@ const createOrder = async (req, res) => {
        WHERE user_id = $1
          AND event_id = $2
          AND status = 'pending'
+         AND (expires_at IS NULL OR expires_at >= NOW())
          AND notes::jsonb ->> 'order_request_key' = $3
-         AND created_at >= NOW() - INTERVAL '30 minutes'
        ORDER BY created_at DESC
        LIMIT 1`,
       [req.user.id, event_id, orderRequestKey]
@@ -245,8 +258,8 @@ const createOrder = async (req, res) => {
         await client.query(
           `INSERT INTO orders
              (id, order_ref, user_id, event_id, attendee_name, attendee_email,
-              attendee_phone, subtotal, commission_amt, total, status, notes)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11)`,
+              attendee_phone, subtotal, commission_amt, total, status, expires_at, notes)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',${pendingOrderExpirySql},$11)`,
           orderPayload
         );
         inserted = true;
@@ -325,7 +338,7 @@ const confirmOrder = async (req, res) => {
 
   try {
     order = await queryOne(
-      `SELECT id, user_id, attendee_email, total
+      `SELECT id, user_id, attendee_email, total, status, expires_at
        FROM orders
        WHERE id = $1`,
       [id]
@@ -335,6 +348,16 @@ const confirmOrder = async (req, res) => {
     }
     if (order.user_id !== req.user.id && order.attendee_email !== req.user.email) {
       return res.status(403).json({ success: false, message: 'Not authorized for this order' });
+    }
+    if (order.status === 'expired' || (order.status === 'pending' && order.expires_at && new Date(order.expires_at) < new Date())) {
+      await query(
+        `UPDATE orders
+         SET status = 'expired', updated_at = NOW()
+         WHERE id = $1
+           AND status = 'pending'`,
+        [id]
+      ).catch(() => {});
+      return res.status(410).json({ success: false, message: 'This pending order has expired. Please create a new order.' });
     }
 
     isFreeOrder = Number(order.total) === 0;
@@ -487,7 +510,7 @@ const getOrderStatus = async (req, res) => {
   const { id } = req.params;
   try {
     const order = await queryOne(
-      `SELECT o.id, o.status, o.order_ref,
+      `SELECT o.id, o.status, o.order_ref, o.expires_at,
               o.attendee_email, o.user_id
        FROM orders o
        WHERE o.id = $1`,
@@ -503,6 +526,19 @@ const getOrderStatus = async (req, res) => {
                     order.attendee_email === req.user.email;
     if (req.user.role !== 'admin' && !isOwner) {
       return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+    if (order.status === 'pending' && order.expires_at && new Date(order.expires_at) < new Date()) {
+      await query(
+        `UPDATE orders
+         SET status = 'expired', updated_at = NOW()
+         WHERE id = $1
+           AND status = 'pending'`,
+        [id]
+      ).catch(() => {});
+      return res.json({
+        success: true,
+        data: { status: 'expired', order_ref: order.order_ref, tickets: [] },
+      });
     }
 
     // If already confirmed, include the tickets so the frontend
